@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset="utf-8"><title>arte</title>
+<style>body{margin:0;background:#262b44;color:#ead4aa;font:12px monospace} #sheet{image-rendering:pixelated;display:block} #view{width:1200px;height:700px;display:block}</style></head>
+<body><canvas id="sheet"></canvas><canvas id="view"></canvas>
+<script src="../js/core.js"></script><script src="../js/config.js"></script><script src="../js/world.js"></script>
+<script src="../js/sim.js"></script>
+<script src="../js/family.js"></script><script src="../js/ai.js"></script>
+<script src="../js/god.js"></script><script src="../js/narrator.js"></script><script src="../js/save.js"></script>
+<script src="../js/art.js"></script><script src="../js/render.js"></script>
+<script>
+const A = G.Art; const S = A.build();
+// folha de sprites
+const sh = document.getElementById('sheet'); sh.width = 1200; sh.height = 440;
+const x = sh.getContext('2d'); x.imageSmoothingEnabled = false;
+x.fillStyle = '#58a447'; x.fillRect(0,0,1200,440);
+let px = 4, py = 4, rowH = 0;
+function put(img, s) { s = s || 3; if (px + img.width*s > 1196) { px = 4; py += rowH + 6; rowH = 0; } x.drawImage(img, px, py, img.width*s, img.height*s); px += img.width*s + 6; rowH = Math.max(rowH, img.height*s); }
+for (let s=0;s<4;s++) for (let v=0;v<3;v++) put(S.broad[s][v]);
+for (let s=0;s<4;s++) put(S.arau[s][0]);
+px = 4; py += rowH + 8; rowH = 0;
+for (let s=0;s<4;s++) for (let f=0;f<4;f++) put(S.bush[s][f]);
+for (let sz=0;sz<3;sz++) for (let sn=0;sn<2;sn++) put(S.rock[sz][sn][0]);
+put(S.stump[0]); put(S.stump[1]); put(S.grave);
+for (const f of S.fire) put(f); put(S.fireOut); put(S.tent.barraca); put(S.tent.barraca2); put(S.mat);
+for (const k in S.item) put(S.item[k], 4);
+px = 4; py += rowH + 8; rowH = 0;
+const fake = (id, sex, look) => ({ id, sex, look });
+const people = [fake(1,'F',{skin:1,hair:'#181425',cloth:0,beard:false}), fake(2,'M',{skin:3,hair:'#3e2731',cloth:1,beard:true}), fake(3,'F',{skin:0,hair:'#be4a2f',cloth:3,beard:false}), fake(4,'M',{skin:4,hair:'#181425',cloth:2,beard:false})];
+for (const p of people) { const s = A.personSheet(p); put(s.sheet, 4); put(s.sleep, 4); }
+for (const n of ['madeira','pedra','agua','frutas','peixe','fogo','construir','energia','social','saude','humor','barraca','cronica','primavera','verao','outono','inverno','nublado','chuva','neve','termometro','pessoa']) put(A.icon(n), 3);
+px = 4; py += rowH + 8; rowH = 0;
+for (let f = 0; f < 3; f++) put(A.wolfSheet(f), 4);
+for (const n of ['lobo','seca','pergunta','reza','raio','cura']) put(A.icon(n), 3);
+</script>
+<script>
+// mundo
+const params = new URLSearchParams(location.search);
+const seed = +(params.get('seed') || 42), days = +(params.get('days') || 3), hour = +(params.get('hour') || 13), zoom = +(params.get('zoom') || 3);
+const w = G.W.generate(seed); const site = G.W.bestSite(w);
+const st = G.Sim.newGame(seed, site, ['Iara','Aruã'], w);
+function spot(type, near) { for (let r=2;r<10;r++) for (let dy=-r;dy<=r;dy++) for (let dx=-r;dx<=r;dx++) { if (Math.max(Math.abs(dx),Math.abs(dy))!==r) continue; if (!G.Sim.canPlace(st, type, near.x+dx, near.y+dy)) return {x:near.x+dx,y:near.y+dy}; } }
+const f = spot('fogueira', {x: st.camp.x+1, y: st.camp.y+1}); G.Sim.placeBlueprint(st, 'fogueira', f.x, f.y);
+const t = spot('barraca', {x: st.camp.x, y: st.camp.y}); G.Sim.placeBlueprint(st, 'barraca', t.x, t.y);
+G.Sim.advance(st, days * 1440);
+const target = Math.floor(st.t / 1440) * 1440 + hour * 60; while (st.t < target) G.Sim.step(st, 2);
+// ?ev=lobos|nevasca|tempestade|seca|andarilho: força um acontecimento do Narrador para ver a arte
+const ev = params.get('ev');
+if (ev) {
+  st.narr.plan = { k: ev, warnAt: st.t, at: st.t, warned: true, opts: { pack: 3 } };
+  G.Narr.hourly(st);
+  if (ev === 'lobos') st.narr.ents.forEach((e, i) => { e.x = st.camp.x + 6 + i * 1.3; e.y = st.camp.y + 3 + (i % 2); e.px = e.x; e.py = e.y; e.dir = i % 4; });
+  if (ev === 'andarilho') { for (let i = 0; i < 600 && !G.Narr.pending(st); i++) G.Sim.step(st, 2); }
+  for (let i = 0; i < +(params.get('steps') || 1); i++) G.Sim.step(st, 2);
+}
+st.events.length = 0;
+const v = document.getElementById('view');
+G.R.init(v); const fp = params.get("follow") ? st.people[0] : null; G.R.cam.x = fp ? fp.x*16 : (st.camp.x + 1) * 16; G.R.cam.y = fp ? fp.y*16 : (st.camp.y + 1) * 16; G.R.cam.zoom = zoom;
+G.R.overlay.selPerson = 1;
+let n = 0; function frame(now) { G.R.draw(st, 1, now); if (++n < 30) requestAnimationFrame(frame); else document.title = 'pronto'; console.log('pessoas', JSON.stringify(st.people.map(p=>[p.name,p.x.toFixed(1),p.y.toFixed(1),p.act&&p.act.type])), 'camp', st.camp.x, st.camp.y, 'obras', JSON.stringify(st.buildings.map(b=>[b.type,b.built,b.fuel]))); } requestAnimationFrame(frame);
+window.st = st;
+</script></body></html>
