@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Gênesis</title>
+<meta name="description" content="Um casal. Um lugar. Todas as eras. Simulador de sobrevivência em pixel art em que você é Deus.">
+<meta name="theme-color" content="#181425">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400;1,600&family=Pixelify+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/digits.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-mode="title">
+<!--BODY-->
+<canvas id="view" aria-label="Mundo do jogo"></canvas>
+<div id="fx" aria-hidden="true"></div>
+
+<!-- título -->
+<section id="scr-title" class="screen">
+  <div class="title-card">
+    <h1 class="wordmark">Gênesis</h1>
+    <p class="pitch">Um casal. Um lugar. Todas as eras.</p>
+    <div class="title-actions">
+      <p id="acct-line" class="small acct-line" hidden></p>
+      <button id="btn-continue" class="btn btn-gold" hidden>Continuar</button>
+      <p id="continue-info" class="small muted" hidden></p>
+      <button id="btn-new" class="btn">Novo mundo</button>
+      <div id="acct-actions" class="acct-actions" hidden>
+        <button id="btn-login" class="btn btn-small">Entrar</button>
+        <button id="btn-signup" class="btn btn-small">Criar conta</button>
+      </div>
+      <div class="acct-actions">
+        <button id="btn-ranking" class="btn btn-small" hidden>Ranking</button>
+        <button id="btn-logout" class="btn btn-small" hidden>Sair da conta</button>
+      </div>
+    </div>
+    <p class="small muted title-foot">Você é Deus. Eles vão precisar de você.</p>
+  </div>
+</section>
+
+<!-- escolha do local -->
+<section id="scr-site" class="screen" hidden>
+  <header class="site-bar panel">
+    <div>
+      <h2>Escolha onde o casal vai morar</h2>
+      <p class="small muted">Toque no mapa. Água perto, árvores, pedras e pitangueiras ajudam no primeiro inverno.</p>
+    </div>
+    <div class="site-bar-actions">
+      <span id="seed-label" class="small muted"></span>
+      <button id="btn-reroll" class="btn btn-small">Outro mundo</button>
+    </div>
+  </header>
+  <aside id="site-card" class="panel site-card">
+    <h3 id="site-title">Nenhum lugar escolhido</h3>
+    <dl id="site-stats" class="site-stats"></dl>
+    <p id="site-reason" class="small warn" hidden></p>
+    <button id="btn-start" class="btn btn-gold" disabled>Começar aqui</button>
+  </aside>
+</section>
+
+<!-- nomes do casal -->
+<div id="modal-names" class="modal" hidden>
+  <form id="form-names" class="panel modal-card">
+    <h2>Quem vai chegar?</h2>
+    <p class="story">Dois viajantes, sem nada além das mãos e de uma cesta com frutas.</p>
+    <label for="name-f">Ela</label>
+    <div class="name-row"><input id="name-f" maxlength="14" autocomplete="off" required><button type="button" class="btn btn-small" data-roll="F">Sortear</button></div>
+    <label for="name-m">Ele</label>
+    <div class="name-row"><input id="name-m" maxlength="14" autocomplete="off" required><button type="button" class="btn btn-small" data-roll="M">Sortear</button></div>
+    <fieldset class="narr-pick">
+      <legend>Narrador: quem conta esta história</legend>
+      <div id="narr-opts" class="narr-opts" role="radiogroup" aria-label="Narrador"></div>
+    </fieldset>
+    <div class="modal-actions">
+      <button type="button" id="btn-names-back" class="btn">Voltar</button>
+      <button type="submit" class="btn btn-gold">Enviar o casal</button>
+    </div>
+  </form>
+</div>
+
+<!-- conta -->
+<div id="modal-acct" class="modal" hidden>
+  <form id="form-acct" class="panel modal-card" novalidate>
+    <h2 id="acct-title">Entrar</h2>
+    <p class="story">A conta guarda o seu mundo na nuvem. Dá para continuar de outro aparelho.</p>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="entrar" class="on">Entrar</button>
+      <button type="button" role="tab" data-tab="criar">Criar conta</button>
+    </div>
+    <label for="acct-nome" class="only-criar">Nome</label>
+    <input id="acct-nome" class="only-criar" maxlength="24" autocomplete="nickname">
+    <label for="acct-email">E-mail</label>
+    <input id="acct-email" type="email" autocomplete="email">
+    <label for="acct-senha">Senha</label>
+    <input id="acct-senha" type="password" autocomplete="current-password">
+    <p id="acct-erro" class="small warn" hidden></p>
+    <div class="modal-actions">
+      <button type="button" id="acct-cancel" class="btn">Voltar</button>
+      <button type="submit" id="acct-submit" class="btn btn-gold">Entrar</button>
+    </div>
+  </form>
+</div>
+
+<!-- ranking -->
+<div id="modal-rank" class="modal" hidden>
+  <div class="panel modal-card">
+    <h2>Ranking dos povos</h2>
+    <p class="small muted">Os mundos que atravessaram mais anos.</p>
+    <ol id="rank-list" class="rank"></ol>
+    <div class="modal-actions"><span></span><button id="rank-close" class="btn">Fechar</button></div>
+  </div>
+</div>
+
+<!-- tempo fora -->
+<div id="modal-away" class="modal" hidden>
+  <div class="panel modal-card away-card">
+    <h2 id="away-title">Enquanto você esteve fora…</h2>
+    <p id="away-lead" class="story"></p>
+    <dl id="away-stats" class="site-stats"></dl>
+    <ol id="away-chron" class="chron"></ol>
+    <div class="modal-actions"><span></span><button id="away-ok" class="btn btn-gold">Voltar ao meu povo</button></div>
+  </div>
+</div>
+
+<!-- nascimento: Deus dá o nome -->
+<div id="modal-birth" class="modal" hidden>
+  <form id="form-birth" class="panel modal-card birth-card">
+    <img id="birth-ico" class="ico ico-lg" alt="">
+    <h2 id="birth-title">Nasceu uma criança!</h2>
+    <p id="birth-lead" class="story"></p>
+    <label for="birth-name">Nome</label>
+    <div class="name-row"><input id="birth-name" maxlength="14" autocomplete="off" required><button type="button" class="btn btn-small" id="birth-roll">Sortear</button></div>
+    <div class="modal-actions"><span class="small muted">O jogo fica pausado até você decidir.</span><button type="submit" class="btn btn-gold">Dar o nome</button></div>
+  </form>
+</div>
+
+<!-- viajantes pedem abrigo: acolher ou mandar seguir -->
+<div id="modal-choice" class="modal" hidden>
+  <div class="panel modal-card choice-card" role="dialog" aria-labelledby="choice-title">
+    <img id="choice-ico" class="ico ico-lg" alt="">
+    <h2 id="choice-title">Alguém pede abrigo</h2>
+    <p id="choice-lead" class="story"></p>
+    <ul id="choice-people" class="choice-people"></ul>
+    <p id="choice-note" class="small muted"></p>
+    <div class="modal-actions">
+      <button type="button" id="choice-no" class="btn">Mandar seguir</button>
+      <button type="button" id="choice-yes" class="btn btn-gold">Acolher</button>
+    </div>
+  </div>
+</div>
+
+<!-- árvore da família -->
+<div id="modal-tree" class="modal" hidden>
+  <div class="panel modal-card tree-card">
+    <h2>Árvore da família</h2>
+    <p class="small muted">Romance e filhos só entre adultos e nunca entre parentes próximos.</p>
+    <div id="tree" class="tree"></div>
+    <div class="modal-actions"><span></span><button id="tree-close" class="btn">Fechar</button></div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud" hidden>
+  <header id="topbar">
+    <div class="almanac panel" id="almanac">
+      <img id="season-ico" class="ico ico-lg" alt="">
+      <div>
+        <div class="season-line"><b id="season-name">Primavera</b> <span id="season-day">dia 1</span></div>
+        <div class="small muted"><span id="year-label">Ano 1</span> · <span id="forecast">Inverno em 45 dias</span></div>
+        <div id="event-line" class="event-line small" hidden><img class="ico" alt=""><span></span></div>
+      </div>
+    </div>
+    <div class="clock panel" id="clockbox">
+      <span id="clock">07:00</span>
+      <img id="weather-ico" class="ico" alt="">
+      <span id="temp">16 °C</span>
+    </div>
+    <div class="speed panel" role="group" aria-label="Velocidade do tempo">
+      <button class="spd" data-speed="0" title="Pausar (espaço)" aria-label="Pausar">❚❚</button>
+      <button class="spd" data-speed="1" title="Tecla 1">1x</button>
+      <button class="spd" data-speed="2" title="Tecla 2">2x</button>
+      <button class="spd" data-speed="3" title="Tecla 3">5x</button>
+      <button id="btn-menu" class="spd" title="Menu" aria-label="Menu">≡</button>
+    </div>
+  </header>
+
+  <div id="menu" class="panel menu" hidden>
+    <button id="menu-save" class="btn btn-small">Salvar agora</button>
+    <button id="menu-title" class="btn btn-small">Voltar ao título</button>
+    <p id="save-status" class="small muted">O jogo salva sozinho a cada minuto.</p>
+    <label class="small muted" for="menu-narr">Narrador</label>
+    <select id="menu-narr" class="select"></select>
+    <p id="narr-desc" class="small muted"></p>
+    <p class="small muted keys">Espaço pausa · 1 2 3 velocidade · F fogueira · B barraca · Q calor · R raio · U chuva · E cura · C crônica · T árvore · roda do mouse aproxima</p>
+  </div>
+
+  <div id="stock" class="panel stock" aria-label="Estoque"></div>
+
+  <aside id="p-vontades" class="panel sheet" data-sheet="vontades">
+    <h2>Vontades</h2>
+    <p class="story sub">O que seu povo deve priorizar.</p>
+    <div id="vontades"></div>
+    <h2 class="goals-title" id="goals-title">Metas do Ato 1</h2>
+    <ol id="goals" class="goals"></ol>
+  </aside>
+
+  <div id="col-right">
+    <aside id="p-deus" class="panel sheet" data-sheet="deus">
+      <div class="deus-head"><h2>Deus</h2><span class="small"><b id="poder-num">0</b> de Poder</span></div>
+      <div class="bar poder" title="O Poder nasce da fé do povo"><i id="poder-bar"></i></div>
+      <div class="align" title="Como o povo vê você"><span class="small muted">Temido</span><div class="align-track"><i id="align-mark"></i></div><span class="small muted">Bondoso</span></div>
+      <div id="miracles" class="miracles"></div>
+      <ol id="prayers" class="prayers"></ol>
+    </aside>
+    <aside id="p-povo" class="panel sheet" data-sheet="povo">
+      <div class="povo-head"><h2 id="povo-title">Seu povo</h2><button id="btn-tree" class="btn btn-small" title="Árvore da família (T)"><img class="ico" alt=""> Árvore</button></div>
+      <div id="people"></div>
+      <div id="inspector"></div>
+    </aside>
+  </div>
+
+  <div id="p-construir" class="panel sheet" data-sheet="construir">
+    <h2 class="sheet-only">Construir</h2>
+    <div id="builds" class="builds"></div>
+  </div>
+
+  <button id="btn-cronica" class="panel btn-cronica" aria-controls="p-cronica"><img class="ico" alt=""> Crônica</button>
+
+  <aside id="p-cronica" class="panel sheet drawer" data-sheet="cronica" aria-label="Crônica">
+    <div class="drawer-head"><h2>Crônica</h2><button id="cronica-close" class="btn btn-small">Fechar</button></div>
+    <ol id="chron" class="chron"></ol>
+  </aside>
+
+  <nav id="mobnav" aria-label="Painéis">
+    <button data-open="vontades"><img class="ico" alt="">Vontades</button>
+    <button data-open="construir"><img class="ico" alt="">Construir</button>
+    <button data-open="deus"><img class="ico" alt="">Deus</button>
+    <button data-open="povo"><img class="ico" alt="">Povo</button>
+    <button data-open="cronica"><img class="ico" alt="">Crônica</button>
+  </nav>
+
+  <div id="place-hint" class="panel place-hint" hidden></div>
+  <div id="toasts" aria-live="polite"></div>
+</div>
+
+<!-- fim de jogo -->
+<section id="scr-over" class="screen" hidden>
+  <div class="panel over-card">
+    <h2>O povo se foi.</h2>
+    <p class="story">Esta crônica fica como lápide.</p>
+    <ol id="over-chron" class="chron"></ol>
+    <button id="btn-over-new" class="btn btn-gold">Começar outro mundo</button>
+  </div>
+</section>
+<!--/BODY-->
+<script src="js/core.js"></script>
+<script src="js/config.js"></script>
+<script src="js/world.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/family.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/god.js"></script>
+<script src="js/narrator.js"></script>
+<script src="js/save.js"></script>
+<script src="js/offline.js"></script>
+<script src="js/net.js"></script>
+<script src="js/art.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
