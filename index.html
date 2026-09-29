@@ -118,6 +118,7 @@
   <div class="panel modal-card away-card">
     <h2 id="away-title">Enquanto você esteve fora…</h2>
     <p id="away-lead" class="story"></p>
+    <div id="away-bar" class="bar poder" hidden><i></i></div>
     <dl id="away-stats" class="site-stats"></dl>
     <ol id="away-chron" class="chron"></ol>
     <div class="modal-actions"><span></span><button id="away-ok" class="btn btn-gold">Voltar ao meu povo</button></div>
@@ -151,11 +152,39 @@
   </div>
 </div>
 
+<!-- descobertas: a trilha da Era da Família -->
+<div id="modal-disc" class="modal" hidden>
+  <div class="panel modal-card disc-card" role="dialog" aria-labelledby="disc-title">
+    <h2 id="disc-title">Descobertas</h2>
+    <div class="tabs disc-tabs" role="tablist">
+      <button type="button" role="tab" data-dtab="trilha" class="on">Trilha</button>
+      <button type="button" role="tab" data-dtab="inv">Invenções <span id="inv-count"></span></button>
+    </div>
+    <p id="disc-intro" class="small muted"></p>
+    <ol id="disc-list" class="disc-list"></ol>
+    <ul id="inv-list" class="disc-list" hidden></ul>
+    <p id="disc-era" class="small disc-era"></p>
+    <div class="modal-actions"><span></span><button id="disc-close" class="btn">Fechar</button></div>
+  </div>
+</div>
+
+<!-- fim da Era da Família (portão do MVP) -->
+<div id="modal-era" class="modal" hidden>
+  <div class="panel modal-card era-card" role="dialog" aria-labelledby="era-title">
+    <img id="era-ico" class="ico ico-lg" alt="">
+    <h2 id="era-title">A Era da Família chegou ao fim</h2>
+    <p id="era-lead" class="story"></p>
+    <dl id="era-stats" class="site-stats"></dl>
+    <p class="small muted">Agora vem a aldeia: novas metas pedem casas, oficinas e caminhos. As próximas eras chegam nas próximas versões. O jogo continua.</p>
+    <div class="modal-actions"><span></span><button id="era-ok" class="btn btn-gold">Continuar</button></div>
+  </div>
+</div>
+
 <!-- árvore da família -->
 <div id="modal-tree" class="modal" hidden>
   <div class="panel modal-card tree-card">
     <h2>Árvore da família</h2>
-    <p class="small muted">Romance e filhos só entre adultos e nunca entre parentes próximos.</p>
+    <p class="small muted">Pares só entre adultos e nunca entre parentes próximos. Cada um pode ter mais de um par; o arco pontilhado liga pares que não estão lado a lado.</p>
     <div id="tree" class="tree"></div>
     <div class="modal-actions"><span></span><button id="tree-close" class="btn">Fechar</button></div>
   </div>
@@ -182,18 +211,29 @@
       <button class="spd" data-speed="1" title="Tecla 1">1x</button>
       <button class="spd" data-speed="2" title="Tecla 2">2x</button>
       <button class="spd" data-speed="3" title="Tecla 3">5x</button>
+      <button class="spd" data-speed="4" title="Tecla 4">10x</button>
+      <button class="spd" data-speed="5" title="Tecla 5">20x</button>
       <button id="btn-menu" class="spd" title="Menu" aria-label="Menu">≡</button>
     </div>
   </header>
 
-  <div id="menu" class="panel menu" hidden>
+  <div id="menu" class="panel menu" hidden role="dialog" aria-label="Menu">
+    <div class="menu-head"><h2>Menu</h2><button id="menu-close" class="btn btn-small" aria-label="Fechar o menu">Fechar</button></div>
     <button id="menu-save" class="btn btn-small">Salvar agora</button>
     <button id="menu-title" class="btn btn-small">Voltar ao título</button>
     <p id="save-status" class="small muted">O jogo salva sozinho a cada minuto.</p>
     <label class="small muted" for="menu-narr">Narrador</label>
     <select id="menu-narr" class="select"></select>
     <p id="narr-desc" class="small muted"></p>
-    <p class="small muted keys">Espaço pausa · 1 2 3 velocidade · F fogueira · B barraca · Q calor · R raio · U chuva · E cura · C crônica · T árvore · roda do mouse aproxima</p>
+    <label class="small muted" for="menu-offline">Tempo com o jogo fechado</label>
+    <select id="menu-offline" class="select"></select>
+    <div class="menu-sound" role="group" aria-label="Som">
+      <label class="chk"><input type="checkbox" id="snd-on"> Som</label>
+      <label class="small muted" for="snd-music">Música</label><input type="range" id="snd-music" min="0" max="100" step="5">
+      <label class="small muted" for="snd-amb">Ambiente</label><input type="range" id="snd-amb" min="0" max="100" step="5">
+      <label class="small muted" for="snd-sfx">Efeitos</label><input type="range" id="snd-sfx" min="0" max="100" step="5">
+    </div>
+    <p class="small muted keys">Espaço pausa · 1 a 5 velocidade · F fogueira · B barraca · G armazém · M moquém · J jirau · O forno · K marcenaria · L tecelagem · P caminho · Q calor · R raio · U chuva · E cura · V revelação · C crônica · T árvore · I descobertas · N som · Esc fecha · roda do mouse aproxima</p>
   </div>
 
   <div id="stock" class="panel stock" aria-label="Estoque"></div>
@@ -215,7 +255,7 @@
       <ol id="prayers" class="prayers"></ol>
     </aside>
     <aside id="p-povo" class="panel sheet" data-sheet="povo">
-      <div class="povo-head"><h2 id="povo-title">Seu povo</h2><button id="btn-tree" class="btn btn-small" title="Árvore da família (T)"><img class="ico" alt=""> Árvore</button></div>
+      <div class="povo-head"><h2 id="povo-title">Seu povo</h2><div class="povo-tools"><button id="btn-tree" class="btn btn-small" title="Árvore da família (T)"><img class="ico" alt=""> Árvore</button><button id="btn-disc" class="btn btn-small" title="Descobertas (I)"><img class="ico" alt=""> Descobertas</button></div></div>
       <div id="people"></div>
       <div id="inspector"></div>
     </aside>
@@ -260,6 +300,11 @@
 <script src="js/world.js"></script>
 <script src="js/sim.js"></script>
 <script src="js/family.js"></script>
+<script src="js/life.js"></script>
+<script src="js/tech.js"></script>
+<script src="js/invencoes.js"></script>
+<script src="js/obras.js"></script>
+<script src="js/fauna.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/god.js"></script>
 <script src="js/narrator.js"></script>
@@ -268,6 +313,7 @@
 <script src="js/net.js"></script>
 <script src="js/art.js"></script>
 <script src="js/render.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>
 </body>
