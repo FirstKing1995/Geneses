@@ -159,10 +159,12 @@
     <div class="tabs disc-tabs" role="tablist">
       <button type="button" role="tab" data-dtab="trilha" class="on">Trilha</button>
       <button type="button" role="tab" data-dtab="inv">Invenções <span id="inv-count"></span></button>
+      <button type="button" role="tab" data-dtab="campo">Campo <span id="campo-count"></span></button>
     </div>
     <p id="disc-intro" class="small muted"></p>
     <ol id="disc-list" class="disc-list"></ol>
     <ul id="inv-list" class="disc-list" hidden></ul>
+    <ul id="campo-list" class="disc-list" hidden></ul>
     <p id="disc-era" class="small disc-era"></p>
     <div class="modal-actions"><span></span><button id="disc-close" class="btn">Fechar</button></div>
   </div>
@@ -227,13 +229,14 @@
     <p id="narr-desc" class="small muted"></p>
     <label class="small muted" for="menu-offline">Tempo com o jogo fechado</label>
     <select id="menu-offline" class="select"></select>
+    <label class="chk menu-chk" title="Noites a três e noites de muitos na Crônica, sempre só entre adultos e sem parentes, insinuado e nunca descrito."><input type="checkbox" id="menu-picante"> Noites picantes (só adultos)</label>
     <div class="menu-sound" role="group" aria-label="Som">
       <label class="chk"><input type="checkbox" id="snd-on"> Som</label>
       <label class="small muted" for="snd-music">Música</label><input type="range" id="snd-music" min="0" max="100" step="5">
       <label class="small muted" for="snd-amb">Ambiente</label><input type="range" id="snd-amb" min="0" max="100" step="5">
       <label class="small muted" for="snd-sfx">Efeitos</label><input type="range" id="snd-sfx" min="0" max="100" step="5">
     </div>
-    <p class="small muted keys">Espaço pausa · 1 a 5 velocidade · F fogueira · B barraca · G armazém · M moquém · J jirau · O forno · K marcenaria · L tecelagem · P caminho · Q calor · R raio · U chuva · E cura · V revelação · C crônica · T árvore · I descobertas · N som · Esc fecha · roda do mouse aproxima</p>
+    <p class="small muted keys">Espaço pausa · 1 a 5 velocidade · F fogueira · B barraca · G armazém · M moquém · J jirau · O forno · K marcenaria · L tecelagem · H roça · Y curral · P caminho · X cerca · Q calor · R raio · U chuva · E cura · V revelação · C crônica · T árvore · I descobertas · N som · Esc fecha · roda do mouse aproxima</p>
   </div>
 
   <div id="stock" class="panel stock" aria-label="Estoque"></div>
@@ -247,6 +250,10 @@
   </aside>
 
   <div id="col-right">
+    <aside id="p-obra" class="panel sheet" data-sheet="obra" aria-label="Obra">
+      <div class="obra-head"><h2 id="obra-title">Obra</h2><button id="obra-close" class="btn btn-small" aria-label="Fechar o painel da obra">Fechar</button></div>
+      <div id="obra"></div>
+    </aside>
     <aside id="p-deus" class="panel sheet" data-sheet="deus">
       <div class="deus-head"><h2>Deus</h2><span class="small"><b id="poder-num">0</b> de Poder</span></div>
       <div class="bar poder" title="O Poder nasce da fé do povo"><i id="poder-bar"></i></div>
@@ -276,7 +283,7 @@
   <nav id="mobnav" aria-label="Painéis">
     <button data-open="vontades"><img class="ico" alt="">Vontades</button>
     <button data-open="construir"><img class="ico" alt="">Construir</button>
-    <button data-open="deus"><img class="ico" alt="">Deus</button>
+    <button data-open="deus"><img class="ico" alt="">Deus<span class="badge" id="badge-deus" hidden></span></button>
     <button data-open="povo"><img class="ico" alt="">Povo</button>
     <button data-open="cronica"><img class="ico" alt="">Crônica</button>
   </nav>
@@ -305,6 +312,8 @@
 <script src="js/invencoes.js"></script>
 <script src="js/obras.js"></script>
 <script src="js/fauna.js"></script>
+<script src="js/bichos.js"></script>
+<script src="js/campo.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/god.js"></script>
 <script src="js/narrator.js"></script>
