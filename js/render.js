@@ -14,6 +14,8 @@
   const parts = [];
   const drops = [], splashes = [];
   const bolts = [];
+  const spears = [];
+  const stars = [], flocks = [], glows = [];   // Etapa 6: estrela cadente, araras, vaga-lumes
   let lastNow = 0;
   R.overlay = { ghost: null, ring: null, selPerson: 0, selBuilding: 0 };
 
@@ -165,21 +167,116 @@
         }
       }
     }
+    // Etapa 7: trilhas e caminhos, pintados no chão
+    if (w.road && w.roadCount) roadsIntoChunk(w, cx, cy, season, buf);
     x.putImageData(img, 0, 0);
     return c;
   }
 
-  function chunk(w, cx, cy, season) {
-    const key = cx + ',' + cy;
-    let c = chunks.get(key);
-    if (!c) { c = renderChunk(w, cx, cy, season); chunks.set(key, c); }
-    return c;
+  // ---------- caminhos no chão (Etapa 7) ----------
+  // cada passo de caminho liga o centro dele aos vizinhos com caminho (8 direções): o pixel é caminho se estiver
+  // a menos de r do centro ou de uma dessas ligações. Assim a curva e a diagonal saem contínuas.
+  // 1 trilha (grama gasta) · 2 terra batida · 3 pedra
+  const ROAD_R = [0, 3.6, 4.6, 5.3];
+  let RPAL = null;
+  function roadPal() {
+    const p = (a) => a.map(pack);
+    const warm = { trail: p(['#8a7448', '#a8905c']), dirt: p(['#6e4a2e', '#946644', '#b0845a']), stone: p(['#4a5474', '#6c7896', '#8b9bb4', '#a8b4c8']), pebble: pack('#c8b48e') };
+    const snow = { trail: p(['#b8b4b0', '#d0ccc8']), dirt: p(['#9a908a', '#b8aea6', '#d0c8c2']), stone: p(['#6e7890', '#9aa6ba', '#b4c0d0', '#ccd6e2']), pebble: pack('#eef3f9') };
+    RPAL = [warm, warm, warm, snow];
   }
-  R.invalidate = function () { chunks.clear(); chunkKey = ''; };
+  function segDist(px, py, ax, ay, bx, by) {
+    const vx = bx - ax, vy = by - ay, l2 = vx * vx + vy * vy;
+    let t = l2 ? ((px - ax) * vx + (py - ay) * vy) / l2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const dx = px - (ax + vx * t), dy = py - (ay + vy * t);
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  const N8R = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  function roadsIntoChunk(w, cx, cy, season, buf) {
+    if (!RPAL) roadPal();
+    const pal = RPAL[season], road = w.road, Wt = w.W, Ht = w.H, seed = w.seed;
+    const lvAt = (tx, ty) => (tx < 0 || ty < 0 || tx >= Wt || ty >= Ht ? 0 : road[ty * Wt + tx]);
+    const deg = (tx, ty) => (lvAt(tx, ty) ? (lvAt(tx + 1, ty) ? 1 : 0) + (lvAt(tx - 1, ty) ? 1 : 0) + (lvAt(tx, ty + 1) ? 1 : 0) + (lvAt(tx, ty - 1) ? 1 : 0) : 0);
+    let best = 0, margin = 0, jit = 0;
+    const check = (d, lv) => {
+      const r = ROAD_R[lv] + jit * (lv === 1 ? 2.2 : 1.1);
+      if (d <= r && (lv > best || (lv === best && r - d > margin))) { best = lv; margin = r - d; }
+    };
+    for (let ty = 0; ty < CH; ty++) for (let tx = 0; tx < CH; tx++) {
+      const gx = cx * CH + tx, gy = cy * CH + ty;
+      if (gx >= Wt || gy >= Ht) continue;
+      // os passos de caminho aqui e em volta
+      const cand = [];
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const v = lvAt(gx + dx, gy + dy); if (v) cand.push([gx + dx, gy + dy, v]); }
+      if (!cand.length) continue;
+      for (let py = 0; py < TS; py++) for (let px = 0; px < TS; px++) {
+        const wx = gx * TS + px, wy = gy * TS + py, fx = wx + 0.5, fy = wy + 0.5;
+        jit = G.hash2(wx, wy, seed + 71) - 0.5;
+        best = 0; margin = 0;
+        for (const [ax, ay, av] of cand) {
+          const acx = ax * TS + 8, acy = ay * TS + 8;
+          check(Math.hypot(fx - acx, fy - acy), av);
+          for (const [ddx, ddy] of N8R) {
+            const bv = lvAt(ax + ddx, ay + ddy);
+            if (!bv) continue;
+            // diagonal que corta o canto: só nas curvas (num cruzamento ou num T ela viraria uma pracinha)
+            if (ddx && ddy && (deg(ax + ddx, ay) >= 3 || deg(ax, ay + ddy) >= 3)) continue;
+            check(segDist(fx, fy, acx, acy, acx + ddx * TS, acy + ddy * TS), Math.min(av, bv));
+          }
+        }
+        if (!best) continue;
+        const o = (ty * TS + py) * CPX + tx * TS + px, h = G.hash2(wx, wy, seed + 73);
+        if (best === 1) {
+          // trilha: grama gasta, mais falhada na beirada
+          if (h < (margin < 1.2 ? 0.45 : 0.85)) buf[o] = pal.trail[h < 0.25 ? 0 : 1];
+        } else if (best === 2) {
+          let c = margin < 1 ? pal.dirt[0] : pal.dirt[1];
+          if (margin >= 1 && h < 0.07) c = pal.dirt[2];
+          else if (margin >= 1.5 && h > 0.975) c = pal.pebble;
+          buf[o] = c;
+        } else {
+          // pedras encaixadas, fiadas de 3 px desencontradas, e meio-fio escuro
+          const row = Math.floor(wy / 3), off = row % 2 ? 2 : 0;
+          const mortar = wy % 3 === 0 || (wx + off) % 4 === 0;
+          let c;
+          if (margin < 0.9) c = pal.stone[0];
+          else if (mortar) c = pal.stone[0];
+          else {
+            const cell = G.hash2(Math.floor((wx + off) / 4), row, seed + 77);
+            c = cell < 0.33 ? pal.stone[1] : cell < 0.75 ? pal.stone[2] : pal.stone[3];
+            if ((wx + off) % 4 === 1 && wy % 3 === 1) c = pal.stone[3];
+          }
+          buf[o] = c;
+        }
+      }
+    }
+  }
+
+  // chunks que precisam ser refeitos (um caminho mudou): o velho segue na tela até o novo ficar pronto
+  const dirty = new Set();
+  function dirtyTile(i) {
+    const Wt = C.MAP, x = i % Wt, y = (i / Wt) | 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const tx = x + dx, ty = y + dy;
+      if (tx < 0 || ty < 0 || tx >= Wt || ty >= Wt) continue;
+      dirty.add(Math.floor(tx / CH) + ',' + Math.floor(ty / CH));
+    }
+  }
+  R.invalidate = function () { chunks.clear(); dirty.clear(); chunkKey = ''; };
 
   // ---------- partículas ----------
   function spawn(p) { if (parts.length < 400) parts.push(p); }
   R.event = function (e) {
+    if (e.k === 'road') { dirtyTile(e.i); return; }
+    if (e.k === 'upgrade') {
+      // obra melhorada: faíscas douradas subindo em volta
+      for (let i = 0; i < 22; i++) {
+        const a = Math.random() * Math.PI * 2, r = (0.6 + Math.random() * 0.8) * TS;
+        spawn({ x: e.x * TS + Math.cos(a) * r, y: e.y * TS + Math.sin(a) * r * 0.6, vx: 0, vy: -12 - Math.random() * 16, g: 0, life: 1.1 + Math.random() * 0.7, col: Math.random() < 0.6 ? '#feae34' : '#fee761' });
+      }
+      return;
+    }
     if (e.k === 'bolt') {
       bolts.push({ x: e.x, y: e.y, t0: performance.now(), seed: Math.random() * 1000 });
       for (let i = 0; i < 18; i++) spawn({ x: e.x * TS + 8, y: e.y * TS + 10, vx: (Math.random() - 0.5) * 60, vy: -20 - Math.random() * 40, g: 90, life: 0.7, col: Math.random() < 0.5 ? '#fee761' : '#ffffff' });
@@ -197,10 +294,27 @@
       }
       return;
     }
+    if (e.k === 'fireLit') {
+      // fagulhas subindo quando acendem o fogo
+      for (let i = 0; i < 12; i++) spawn({ x: e.x * TS + 8 + (Math.random() - 0.5) * 8, y: e.y * TS + 8, vx: (Math.random() - 0.5) * 14, vy: -18 - Math.random() * 22, g: -4, life: 0.9 + Math.random() * 0.6, col: Math.random() < 0.5 ? '#feae34' : '#fee761' });
+      return;
+    }
     if (e.k === 'fell') {
       for (let i = 0; i < 10; i++) spawn({ x: e.x * TS + 8 + (Math.random() - 0.5) * 10, y: e.y * TS + 2, vx: (Math.random() - 0.5) * 20, vy: -10 - Math.random() * 20, g: 40, life: 1.2, col: Math.random() < 0.6 ? '#3e8948' : '#733e39' });
     } else if (e.k === 'splash') {
       for (let i = 0; i < 6; i++) spawn({ x: e.x * TS + 8, y: e.y * TS + 8, vx: (Math.random() - 0.5) * 24, vy: -14 - Math.random() * 10, g: 50, life: 0.6, col: '#c8f4ff' });
+    } else if (e.k === 'throw') {
+      // lança voando de quem caça até a capivara
+      spears.push({ x1: e.x1 * TS, y1: e.y1 * TS - 6, x2: e.x2 * TS, y2: e.y2 * TS - 3, t0: performance.now(), bow: !!e.bow });
+    } else if (e.k === 'star') {
+      // nos cantos de cima (o meio de cima é dos avisos), riscando para o lado de fora
+      const left = Math.random() < 0.5;
+      stars.push({ t0: performance.now(), x: (left ? 0.3 - Math.random() * 0.12 : 0.7 + Math.random() * 0.12) * W, y: (0.1 + Math.random() * 0.2) * H, dx: (left ? -1 : 1) * (0.2 + Math.random() * 0.1) * W, dy: 0.16 * H });
+    } else if (e.k === 'birds') {
+      const n = 5 + Math.floor(Math.random() * 4), fromLeft = Math.random() < 0.5, y0 = (0.2 + Math.random() * 0.4) * H;
+      flocks.push({ t0: performance.now(), fromLeft, birds: Array.from({ length: n }, (_, i) => ({ dx: -i * 18 * dpr - Math.random() * 10 * dpr, dy: (Math.random() - 0.5) * 50 * dpr, k: i % 3, ph: Math.random() * 6 })), y0 });
+    } else if (e.k === 'fight') {
+      for (let i = 0; i < 8; i++) spawn({ x: e.x * TS + (Math.random() - 0.5) * 8, y: e.y * TS - 12, vx: (Math.random() - 0.5) * 24, vy: -8 - Math.random() * 10, g: 20, life: 0.8, col: Math.random() < 0.6 ? '#e43b44' : '#feae34' });
     } else if (e.k === 'bite') {
       // mordida: respingo vermelho e um risco branco
       for (let i = 0; i < 10; i++) spawn({ x: e.x * TS + (Math.random() - 0.5) * 6, y: e.y * TS - 4 + (Math.random() - 0.5) * 6, vx: (Math.random() - 0.5) * 30, vy: -12 - Math.random() * 16, g: 60, life: 0.7, col: Math.random() < 0.7 ? '#e43b44' : '#ffffff' });
@@ -215,9 +329,31 @@
       p.x += p.vx * dt; p.y += p.vy * dt;
     }
     if (!S) return;
+    // festa: notas de música sobre quem dança; cantoria: sobre o fogo; a flauta (Etapa 8): sobre quem toca
+    const flute = S.life && S.life.story && S.life.story.on && S.life.story.music ? S.life.story.teller : 0;
+    for (const q of S.people) {
+      if (!q.alive || !q.act) continue;
+      const on = (q.act.type === 'festa' && q.act.stage === 'dance') || (flute === q.id && q.act.type === 'historia' && q.act.stage === 'tell');
+      if (!on || Math.random() > dt * (flute === q.id ? 1.6 : 0.9)) continue;
+      spawn({ x: q.x * TS + (Math.random() - 0.5) * 6, y: q.y * TS - 16, vx: (Math.random() - 0.5) * 6, vy: -9, g: 0, life: 1.6, spr: Math.random() < 0.5 ? 'note' : 'note2' });
+    }
+    const vasos = G.Tech.known(S, 'vasos');
+    // vaga-lumes: piscam perto do acampamento de noite
+    if (S.life && S.life.firefliesUntil > S.t && darkness(S.ck.hour) > 0.3 && Math.random() < dt * 6 && glows.length < 40) {
+      const a = Math.random() * Math.PI * 2, r = 2 + Math.random() * 9;
+      glows.push({ x: (S.camp.x + 1 + Math.cos(a) * r) * TS, y: (S.camp.y + 1 + Math.sin(a) * r) * TS, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, life: 2 + Math.random() * 2, ph: Math.random() * 6 });
+    }
+    for (let i = glows.length - 1; i >= 0; i--) { const g = glows[i]; g.life -= dt; g.x += g.vx * dt; g.y += g.vy * dt; if (g.life <= 0) glows.splice(i, 1); }
     for (const b of S.buildings) {
+      // moquém armado: fumaça fina
+      if (b.type === 'moquem' && b.batch && Math.random() < dt * 3) spawn({ x: b.x * TS + 6 + Math.random() * 5, y: b.y * TS + 2, vx: (Math.random() - 0.5) * 3, vy: -7 - Math.random() * 4, g: 0, life: 2.6, col: 'smoke' });
+      // casa de pedra com gente dentro no frio: fumaça na chaminé (Etapa 7)
+      if (b.kind === 'pedra' && b.built && S.temp < 14 && Math.random() < dt * 2.5 && S.people.some((p) => p.alive && p.inTent === b.id)) {
+        spawn({ x: b.x * TS + 23 + Math.random() * 2, y: b.y * TS - 3, vx: 1 + Math.random() * 2, vy: -6 - Math.random() * 3, g: 0, life: 2.4, col: 'smoke' });
+      }
       if (b.type !== 'fogueira' || !b.built || b.fuel <= 0) continue;
       if (Math.random() < dt * 5) spawn({ x: b.x * TS + 8 + (Math.random() - 0.5) * 3, y: b.y * TS + 4, vx: (Math.random() - 0.5) * 3, vy: -8 - Math.random() * 4, g: 0, life: 2.2, col: 'smoke' });
+      if (vasos && Math.random() < dt * 2) spawn({ x: b.x * TS + 7 + Math.random() * 3, y: b.y * TS + 3, vx: (Math.random() - 0.5) * 2, vy: -6 - Math.random() * 3, g: 0, life: 1.4, col: 'rgba(234,240,248,0.7)' });   // vapor do vaso
       if (Math.random() < dt * 2.5) spawn({ x: b.x * TS + 8, y: b.y * TS + 6, vx: (Math.random() - 0.5) * 8, vy: -18 - Math.random() * 10, g: 0, life: 0.7, col: '#feae34' });
     }
   }
@@ -262,8 +398,9 @@
     let budget = 3;
     for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
       const k = cx + ',' + cy;
-      if (!chunks.has(k)) { if (budget-- <= 0) continue; }
-      const c = chunk(w, cx, cy, season);
+      let c = chunks.get(k);
+      if ((!c || dirty.has(k)) && budget > 0) { budget--; dirty.delete(k); c = renderChunk(w, cx, cy, season); chunks.set(k, c); }
+      if (!c) continue;
       ctx.drawImage(c, Math.round(cx * CPX * sc + ox), Math.round(cy * CPX * sc + oy), Math.ceil(CPX * sc), Math.ceil(CPX * sc));
     }
     const tx0 = Math.max(0, Math.floor(vx0 / TS) - 2), ty0 = Math.max(0, Math.floor(vy0 / TS) - 2);
@@ -283,8 +420,8 @@
         }
       }
     }
-    // tapete do estoque e auras de Calor
-    if (S) drawCamp(S);
+    // tapete do estoque, bancos e caminhos marcados (no chão), auras de Calor
+    if (S) { drawCamp(S); drawGround(S, tx0, ty0, tx1, ty1); }
     if (S && S.god) drawAuras(S, now);
     // lista ordenada por y
     const list = [];
@@ -305,6 +442,13 @@
         const x = U.lerp(p.px, p.x, alpha), y = U.lerp(p.py, p.y, alpha);
         list.push({ y: y * TS + 4, p, x, y });
       }
+      // capivaras: só onde o povo já viu
+      if (S.fauna) for (const e of S.fauna.ents) {
+        if (e.gone || !G.Sim.isSeen(S, Math.floor(e.x), Math.floor(e.y))) continue;
+        const x = U.lerp(e.px, e.x, alpha), y = U.lerp(e.py, e.y, alpha);
+        if (x < tx0 - 1 || x > tx1 + 1 || y < ty0 - 1 || y > ty1 + 1) continue;
+        list.push({ y: y * TS + 3, c: e, x, y });
+      }
       // lobos e viajantes: só onde o povo já viu (na névoa, só os uivos)
       if (S.narr) for (const e of S.narr.ents) {
         if (e.gone || !G.Sim.isSeen(S, Math.floor(e.x), Math.floor(e.y))) continue;
@@ -319,8 +463,10 @@
       if (it.o) drawObj(it.o, season, snow, sc < 1);
       else if (it.b) drawBuilding(S, it.b, now);
       else if (it.e) drawEnt(S, it.e, it.x, it.y, now);
+      else if (it.c) drawCapi(it.c, it.x, it.y);
       else drawPerson(S, it.p, it.x, it.y, now);
     }
+    if (spears.length) drawSpears(now);
     // partículas
     updateParts(dt, S, now);
     for (const p of parts) {
@@ -333,6 +479,7 @@
     // sobreposições do jogador
     const ov = R.overlay;
     if (ov.ghost) drawGhost(S, ov.ghost);
+    if (S && ov.brush) drawBrush(S, ov.brush);
     if (ov.cast) drawCast(ov.cast, now);
     if (S && ov.selPerson) {
       const p = S.people.find((q) => q.id === ov.selPerson);
@@ -351,6 +498,7 @@
       drawLight(S, now);
       if (S.narr && S.narr.ents.length) drawEyes(S, alpha);
       drawWeather(S, dt);
+      drawSky(S, now);
     }
     if (ov.ring) drawRing(ov.ring);
     if (ov.beam) drawBeam(ov, now);
@@ -529,23 +677,61 @@
     pile(it.agua, Math.ceil(st.agua / 6), x + 13, y + 26, 3, 4, 0, 5);
   }
 
+  // no chão, debaixo de todos: os bancos da fogueira do centro e os caminhos marcados (ainda por abrir)
+  function drawGround(S, tx0, ty0, tx1, ty1) {
+    const S2 = A.spr;
+    for (const b of S.buildings) {
+      if (b.type !== 'fogueira' || !b.built || (b.lv || 1) < 3) continue;
+      if (b.x < tx0 - 2 || b.x > tx1 + 2 || b.y < ty0 - 2 || b.y > ty1 + 2) continue;
+      const bx = b.x * TS, by = b.y * TS;
+      blit(S2.bench.h, bx + 2, by - 7); blit(S2.bench.h, bx + 2, by + 19);
+      blit(S2.bench.v, bx - 9, by + 4); blit(S2.bench.v, bx + 20, by + 4);
+    }
+    const w = S.world, jobs = S.obras && S.obras.jobs;
+    if (!jobs || !jobs.length) return;
+    for (const j of jobs) {
+      const x = j.i % w.W, y = (j.i / w.W) | 0;
+      if (x < tx0 || x > tx1 || y < ty0 || y > ty1) continue;
+      rect(x * TS + 2, y * TS + 2, TS - 4, TS - 4, j.lv >= 3 ? 'rgba(139,155,180,0.5)' : 'rgba(184,138,94,0.5)');
+      rect(x * TS + 2, y * TS + 2, TS - 4, 1, 'rgba(254,174,52,0.7)');
+      if (j.prog > 0) rect(x * TS + 2, y * TS + TS - 4, (TS - 4) * Math.min(1, j.prog), 2, '#63c74d');
+    }
+  }
+
+  // o tambor está nas mãos de alguém que já chegou na roda da festa (Etapa 8)?
+  function drumPlaying(S) {
+    const pt = S.life && S.life.party;
+    if (!pt || !pt.on || !pt.drummer) return false;
+    const q = S.people.find((x) => x.id === pt.drummer);
+    return !!(q && q.alive && q.act && q.act.type === 'festa' && q.act.stage === 'dance' && !(q.path && q.pathI < q.path.length));
+  }
+  // a figura da obra no nível dela (Etapa 7): casas, oficinas, armazém
+  function houseImg(d) { const S2 = A.spr; return d.lv >= 3 && d.kind ? S2.house[d.kind] : S2.house[d.lv >= 2 ? 2 : 1]; }
   function drawBuilding(S, b, now) {
     const S2 = A.spr, bx = b.x * TS, by = b.y * TS;
-    const ghost = !b.built;
+    const ghost = !b.built, d = G.Sim.def(b), lv = d.lv || 1;
     if (b.type === 'fogueira') {
-      const lit = b.built && b.fuel > 0;
-      const img = lit ? S2.fire[Math.floor(now / 140) % 3] : S2.fireOut;
+      const lit = b.built && b.fuel > 0, F = S2.fireLv[Math.min(3, lv)];
+      const img = lit ? F.lit[Math.floor(now / 140) % 3] : F.out;
       blit(img, bx, by - 2, ghost ? 0.45 : undefined);
+      // Etapa 8: com os vasos, a panela no fogo; com o tambor, ele fica ao lado da fogueira do acampamento (menos na festa)
+      if (lit && G.Tech.known(S, 'vasos')) blit(S2.vasoFogo, bx + 5, by + 3);
+      if (b.built && G.Tech.known(S, 'tambor') && G.Life && G.Life.campFire(S) === b && !drumPlaying(S)) blit(S2.tambor, bx + 17, by + 4);
+    } else if (b.type === 'moquem' || b.type === 'jirau' || b.type === 'forno') {
+      drawWorks(S2, b, bx, by, ghost, now, lv);
+    } else if (S2.shop[b.type]) {
+      drawShop(S, S2, b, bx, by, ghost, lv, now);
     } else {
-      const img = S2.tent[b.type];
+      const img = houseImg(d);
+      const top = by + 31 - img.height;
       blit(S2.bigShadow, bx + 5, by + 26, ghost ? 0.4 : undefined);
-      blit(img, bx, by + 1, ghost ? 0.45 : undefined);
+      blit(img, bx, top, ghost ? 0.45 : undefined);
       // parto dentro da barraca: um sinal acima dela
       const labor = S.people.find((p) => p.alive && p.inTent === b.id && p.labor);
       if (labor && !ghost) {
         const bob = Math.round(Math.sin(now / 250) * 1);
         const icon = A.icon(labor.labor.hard && !labor.labor.helped ? 'reza' : 'bebe');
-        blit(icon, bx + 16 - icon.width / 2, by - 12 + bob);
+        blit(icon, bx + 16 - icon.width / 2, top - 13 + bob);
       }
       // zzz de quem dorme dentro
       const sleepers = S.people.filter((p) => p.alive && p.inTent === b.id && p.sleeping && !p.carriedBy).length;
@@ -553,15 +739,15 @@
         const t = (now / 1000) % 2;
         for (let i = 0; i < 2; i++) {
           const ph = (t + i) % 2;
-          blit(S2.z, bx + 22 + ph * 3, by - 2 - ph * 6, Math.max(0, 1 - ph / 2));
+          blit(S2.z, bx + 22 + ph * 3, top - 3 - ph * 6, Math.max(0, 1 - ph / 2));
         }
       }
     }
     const job = G.Sim.jobOf(b);
     if (job) {
       outline(bx, by, b.w * TS, b.h * TS, '#feae34');
-      const need = job.cost.madeira + (job.cost.pedra || 0);
-      const have = job.have.madeira + job.have.pedra;
+      let need = 0, have = 0;
+      for (const k in job.cost) { need += job.cost[k]; have += Math.min(job.cost[k], job.have[k] || 0); }
       const f = job.progress > 0 ? job.progress : have / need * 0.999;
       rect(bx + 1, by - 5, b.w * TS - 2, 3, '#181425');
       rect(bx + 2, by - 4, (b.w * TS - 4) * U.clamp(f, 0, 1), 1, job.progress > 0 ? '#63c74d' : '#feae34');
@@ -572,7 +758,131 @@
     }
   }
 
-  const TOOL = { madeira: 'axe', pedra: 'pick', construir: 'hammer', pesca: 'rod' };
+  // moquém, jirau e forno de barro: a obra (no nível dela) e o que está nela
+  function drawWorks(S2, b, bx, by, ghost, now, lv) {
+    const al = ghost ? 0.45 : undefined, big = lv >= 2;
+    if (b.type === 'moquem') {
+      // o grande tem duas grelhas: a de cima começa 2 px mais alto
+      blit(big ? S2.works2.moquem : S2.moquem, bx, big ? by - 3 : by - 2, al);
+      const q = b.batch;
+      if (q && !ghost) {
+        const it = A.spr.item[q.k === 'carne' ? 'carne' : 'peixe'];
+        const done = 1 - q.left / (C.MOQUEM_H * 60);
+        const decks = big && q.n > 10 ? [by - 4, by] : [big ? by - 4 : by - 2];
+        for (const y of decks) {
+          // o peixe escurece na fumaça
+          blit(done > 0.5 ? A.spr.item.defumado : it, bx + 3, y); blit(done > 0.5 ? A.spr.item.defumado : it, bx + 8, y + 1);
+        }
+      }
+      return;
+    }
+    if (b.type === 'jirau') {
+      // o coberto tem o mesmo estrado, com o telhado 12 px acima
+      blit(big ? S2.works2.jirau : S2.jirau, bx, big ? by - 7 : by + 2, al);
+      const q = b.batch;
+      if (q && !ghost) {
+        const done = 1 - q.left / (C.JIRAU_H * 60);
+        const col = done < 0.33 ? '#e43b44' : done < 0.66 ? '#be4a2f' : '#d77643';   // vermelha, depois passa, depois seca
+        const n = Math.min(big ? 20 : 12, q.n);
+        for (let i = 0; i < n; i++) { const k = i % 12, fx = bx + 4 + k * 2 + (i % 2) + (i >= 12 ? 1 : 0), fy = by + 3 + (i % 3 === 0 ? 0 : 1) - (i >= 12 ? 1 : 0); rect(fx, fy, 1.5, 1.5, col); }
+      }
+      return;
+    }
+    blit(S2.bigShadow, bx + 5, by + 27, ghost ? 0.4 : undefined);
+    if (big) blit(S2.works2.forno, bx, by - 1, al);
+    else blit(S2.forno, bx, by + 1, al);
+  }
+  // armazém, marcenaria e tecelagem: a obra e um pouco do que ela guarda ou faz
+  function drawShop(S, S2, b, bx, by, ghost, lv, now) {
+    const img = S2.shop[b.type][Math.min(2, lv)], top = by + 31 - img.height;
+    blit(S2.bigShadow, bx + 5, by + 26, ghost ? 0.4 : undefined);
+    blit(img, bx, top, ghost ? 0.45 : undefined);
+    if (ghost) return;
+    const st = S.stock, it = S2.item;
+    if (b.type === 'marcenaria') {
+      // tábuas prontas encostadas
+      const n = Math.min(3, Math.ceil((st.tabuas || 0) / 4));
+      for (let i = 0; i < n; i++) blit(it.tabuas, bx + 20 + (i % 2), by + 27 - i * 2);
+    } else if (b.type === 'tecelagem') {
+      const nf = Math.min(2, Math.ceil((st.fibra || 0) / 6));
+      for (let i = 0; i < nf; i++) blit(it.fibra, bx + 1 + i * 3, by + 26 - i);
+      const nm = Math.min(3, st.mantas || 0);
+      for (let i = 0; i < nm; i++) blit(it.mantas, bx + 11 + (i % 2), by + 27 - i * 2);
+      if ((st.redes || 0) > 0) blit(it.redes, bx + 22, by + 28);
+    } else if (b.type === 'armazem') {
+      // cestos cheios quando há comida guardada
+      const n = Math.min(3, Math.floor((S.ctx ? S.ctx.foodDays : 0) / 6));
+      const kinds = ['frutas', 'peixe', 'defumado'];
+      for (let i = 0; i < n; i++) blit(it[st[kinds[i]] > 0 ? kinds[i] : 'frutas'], bx + 6 + i * 8, by + 30);
+    }
+  }
+  // capivaras (e a abatida, deitada)
+  function drawCapi(e, x, y) {
+    const wx = x * TS, wy = y * TS;
+    if (e.state === 'morta') { blit(A.capiDead(), wx - 7, wy - 5); return; }
+    const sh = A.capiSheet(e.id % 2), fw = A.CAPI_W, fh = A.CAPI_H;
+    const moving = !!e.path;
+    const frame = moving ? 1 + (Math.floor(e.walk * 4) % 2) : 0;
+    blit(A.spr.shadow, wx - 5, wy + 1);
+    ctx.drawImage(sh, frame * fw, e.dir * fh, fw, fh, Math.round((wx - fw / 2) * sc + ox), Math.round((wy - 6) * sc + oy), Math.round(fw * sc), Math.round(fh * sc));
+  }
+  // lança no ar: 0,3 s de voo, em arco; a flecha (Etapa 8) vai reta e mais rápida, com as penas vermelhas
+  function drawSpears(now) {
+    for (let i = spears.length - 1; i >= 0; i--) {
+      const s = spears[i], t = (now - s.t0) / (s.bow ? 180 : 300);
+      if (t > 1) { spears.splice(i, 1); continue; }
+      const x = s.x1 + (s.x2 - s.x1) * t, y = s.y1 + (s.y2 - s.y1) * t - (s.bow ? Math.sin(t * Math.PI) * 1.5 : Math.sin(t * Math.PI) * 6);
+      const d = Math.hypot(s.x2 - s.x1, s.y2 - s.y1) || 1, ux = (s.x2 - s.x1) / d, uy = (s.y2 - s.y1) / d;
+      if (s.bow) { for (let k = 0; k < 5; k++) rect(x - ux * k, y - uy * k, 1, 1, k === 0 ? '#c0cbdc' : k >= 3 ? '#e43b44' : '#e4a672'); continue; }
+      for (let k = 0; k < 6; k++) rect(x - ux * k, y - uy * k, 1, 1, k < 2 ? '#c0cbdc' : '#b86f50');
+    }
+  }
+  // Etapa 8: arco na mão de quem caça (a corda puxa para trás quando mira, com a flecha no lugar)
+  function drawBow(wx, top, dir, aiming) {
+    const b = dir === 3 ? -1 : 1, x = dir === 3 ? wx - 5 : wx + 4;
+    const curve = [0, 1, 1, 2, 2, 2, 1, 1, 0];
+    for (let i = 0; i < 9; i++) rect(x + curve[i] * b, top - 1 + i, 1, 1, '#733e39');
+    const pull = aiming ? 2 : 0;
+    for (let i = 1; i < 8; i++) { const off = pull ? Math.round(pull * (1 - Math.abs(i - 4) / 4)) : 0; rect(x - off * b, top - 1 + i, 1, 1, 'rgba(234,212,170,0.9)'); }
+    if (aiming) { for (let k = 0; k < 5; k++) rect(x - 2 * b + k * b, top + 3, 1, 1, k === 4 ? '#c0cbdc' : k === 0 ? '#e43b44' : '#e4a672'); }
+  }
+  // faca curta na mão (carnear a caça, cortar o couro)
+  function drawKnife(wx, wy, d, swing) {
+    const fx = d === 3 ? -1 : 1, hx = d >= 2 ? wx + fx * 3 : wx + 3, hy = wy - 3 + (swing ? 1 : 0);
+    rect(hx, hy, 1, 2, '#733e39');
+    rect(hx + fx, hy - 2, 1, 3, '#c0cbdc');
+  }
+  // flauta na boca de quem toca
+  function drawFlute(wx, top, d) {
+    const fx = d === 3 ? -1 : 1, y = top + 4;
+    for (let k = 0; k < 5; k++) rect(wx + fx * (1 + k), y + (d === 0 ? k >> 1 : 0), 1, 1, k === 2 || k === 4 ? '#733e39' : '#e4a672');
+  }
+  // tambor na frente de quem bate, com as mãos subindo e descendo
+  function drawDrum(wx, wy, d, now) {
+    const img = A.spr.tambor, x = d === 2 ? wx + 2 : d === 3 ? wx - 9 : wx - 3, y = wy - 5;
+    blit(img, x, y);
+    const up = Math.floor(now / 150) % 2;
+    rect(x + 1, y - 1 - up, 2, 1, '#e8b796'); rect(x + 4, y - 2 + up, 2, 1, '#e8b796');
+  }
+  // rede de pesca: a corda da mão até a malha na água, que sobe e desce
+  function drawNet(p, wx, wy, swing) {
+    const d = p.dir, fx = d === 3 ? -1 : 1;
+    const nx = wx + (d === 2 ? 9 : d === 3 ? -9 : 1), ny = wy + (d === 0 ? 7 : d === 1 ? -13 : 1) + (swing ? 1 : 0);
+    const hx = d >= 2 ? wx + fx * 3 : wx + 3, hy = wy - 4;
+    for (let i = 0; i <= 5; i++) rect(hx + (nx - hx) * i / 5, hy + (ny - hy) * i / 5, 1, 1, '#c9a068');
+    for (let yy = 0; yy < 5; yy++) for (let xx = -3; xx <= 3; xx++) {
+      if ((xx + yy) % 2 !== 0 || Math.abs(xx) > 3 - (yy >> 1)) continue;
+      rect(nx + xx, ny + yy - 1, 1, 1, 'rgba(234,212,170,0.85)');
+    }
+    rect(nx, ny - 2, 1, 1, '#e43b44');
+  }
+  // quem caça leva a lança em pé
+  function drawSpear(wx, top, dir) {
+    const x = dir === 3 ? wx - 5 : wx + 4;
+    for (let i = 0; i < 12; i++) rect(x, top - 4 + i, 1, 1, i < 2 ? '#c0cbdc' : '#b86f50');
+  }
+
+  const TOOL = { madeira: 'axe', pedra: 'pick', construir: 'hammer', pesca: 'rod', argila: 'pick', oficio: 'hammer', caminho: 'pick' };
   function drawPerson(S, p, x, y, now) {
     const st = G.Family.stage(S, p), kid = st === 'crianca';
     const sheet = kid ? A.kidSheet(p) : A.personSheet(p, st === 'idoso');
@@ -583,6 +893,14 @@
     const babies = S.people.filter((b) => b.alive && b.carriedBy === p.id);
     if (p.sleeping) {
       blit(sheet.sleep, wx - (kid ? 5 : 7), wy - (kid ? 3 : 5));
+      // manta tecida por cima (Etapa 7)
+      if (p.manta) {
+        // do pescoço aos pés (a cabeça fica de fora, à esquerda)
+        const mw = kid ? 5 : 8, mh = kid ? 5 : 6, mx = wx + (kid ? 1 : -1), my = wy - (kid ? 2 : 4);
+        rect(mx, my, mw, mh, '#e43b44');
+        for (let k = 1; k < mw; k += 3) rect(mx + k, my, 1, mh, '#feae34');
+        rect(mx, my + mh - 1, mw, 1, '#a22633');
+      }
       babies.forEach((b, i) => blit(A.bundle(b.look.skin), wx + 3 + i * 4, wy - 3));
       const t = (now / 1000) % 2;
       blit(A.spr.z, wx + 4 + t * 2, wy - 12 - t * 5, Math.max(0, 1 - t / 2));
@@ -593,7 +911,9 @@
     if (moving) frame = 1 + (Math.floor(p.walk * 5) % 2);
     const work = a && (a.stage === 'work' || a.stage === 'build');
     const swing = work ? Math.floor(now / 260) % 2 : 0;
-    const dy = work && swing ? 1 : 0;
+    const drummer = a && a.type === 'festa' && S.life && S.life.party && S.life.party.drummer === p.id && !moving;   // Etapa 8
+    const dance = a && a.type === 'festa' && a.stage === 'dance' && !moving && !drummer;
+    const dy = work && swing ? 1 : dance ? -((Math.floor(now / 170) + p.id) % 2) * 2 : 0;
     const img = sheet.sheet;
     const sx = frame * fw, sy = p.dir * fh, top = kid ? wy - 7 : wy - 10;
     ctx.drawImage(img, sx, sy, fw, fh, Math.round((wx - fw / 2) * sc + ox), Math.round((top + dy) * sc + oy), Math.round(fw * sc), Math.round(fh * sc));
@@ -609,16 +929,27 @@
       const bx0 = p.dir === 2 ? wx + 1 : p.dir === 3 ? wx - 6 : wx - 2 - i * 3;
       if (p.dir !== 1) blit(bw, bx0 + (p.dir >= 2 ? 0 : i * 5), top + 6 + dy);
     });
-    if (work) drawTool(p, a, wx, wy, swing);
+    const Tk = (id) => G.Tech.known(S, id);
+    if (work) drawTool(S, p, a, wx, wy, swing);
+    else if (a && a.type === 'caca' && (a.stage === 'go' || a.stage === 'aim')) { if (Tk('arco')) drawBow(wx, top, p.dir, a.stage === 'aim'); else drawSpear(wx, top, p.dir); }
+    else if (a && a.type === 'caca' && a.stage === 'cut' && Tk('faca')) drawKnife(wx, wy, p.dir, Math.floor(now / 220) % 2);
+    else if (a && a.type === 'historia' && a.stage === 'tell' && S.life && S.life.story && S.life.story.music) drawFlute(wx, top, p.dir);
+    else if (drummer) drawDrum(wx, wy, p.dir, now);
     if (p.prayer) {
       const icon = A.icon('reza'), bob = Math.round(Math.sin(now / 250) * 1);
       blit(icon, wx - icon.width / 2, top - 8 - (p.carry ? 6 : 0) + bob);
     }
     if (p.carry && !work) {
-      const k = p.carry.k === 'obra' ? (p.carry.madeira ? 'madeira' : 'pedra') : p.carry.k;
-      const it = A.spr.item[k];
+      const it = A.spr.item[carryKind(p.carry)];
       if (it) blit(it, wx - it.width / 2, top - it.height);
     }
+  }
+  // o que aparece nas costas: material de obra, pedra do caminho, material do ofício
+  function carryKind(c) {
+    if (c.k === 'obra') return ['madeira', 'pedra', 'tabuas', 'argila', 'fibra'].find((k) => c[k] > 0) || 'madeira';
+    if (c.k === 'caminho') return 'pedra';
+    if (c.k === 'oficio') { const b = c.back || {}; return ['madeira', 'fibra', 'couro', 'pedra'].find((k) => b[k] > 0) || ''; }
+    return c.k;
   }
   // lobos e viajantes (gente de fora ainda não entra no povo: desenha com a folha de uma pessoa qualquer)
   const fakes = new Map();
@@ -665,10 +996,22 @@
       for (const [ex, ey] of A.WOLF_EYES[e.dir]) rect(x + ex, y + ey + bob, 1, 1, col);
     }
   }
-  function drawTool(p, a, wx, wy, swing) {
-    const kind = a.type === 'construir' ? 'hammer' : TOOL[a.type];
+  function drawTool(S, p, a, wx, wy, swing) {
+    const Tk = (id) => G.Tech.known(S, id);
+    const weaving = a.type === 'oficio' && (a.make === 'mantas' || a.make === 'redes');   // no tear, só as mãos
+    let kind = a.type === 'construir' ? 'hammer' : weaving ? null : TOOL[a.type];
+    // Etapa 8: a roupa se corta com a faca e se costura com a agulha; a rede vai para a água; o machado tem cabeça maior
+    if (a.type === 'oficio' && a.make === 'roupas') kind = Tk('agulha') ? 'needle' : Tk('faca') ? 'knife' : null;
+    if (a.type === 'pesca' && Tk('rede')) { drawNet(p, wx, wy, swing); return; }
+    if (kind === 'knife') { drawKnife(wx, wy, p.dir, swing); return; }
     const d = p.dir, fx = d === 3 ? -1 : 1;
     const hx = d >= 2 ? wx + fx * 3 : wx + 3, hy = wy - 4;
+    if (kind === 'needle') {
+      const ny = hy - 1 + (swing ? 1 : 0);
+      rect(hx, ny, 1, 3, '#dfe6f0'); rect(hx + fx, ny + 2 - (swing ? 1 : 0), 1, 1, '#e43b44'); rect(hx + fx * 2, ny + 3, 1, 1, '#e43b44');
+      return;
+    }
+    if (kind === 'axe' && Tk('machado')) kind = 'bigaxe';
     if (kind === 'rod') {
       const tipx = d === 2 ? wx + 9 : d === 3 ? wx - 9 : wx + 5, tipy = d === 1 ? wy - 14 : wy - 11;
       for (let i = 0; i <= 5; i++) rect(hx + (tipx - hx) * i / 5, hy + (tipy - hy) * i / 5, 1, 1, '#733e39');
@@ -680,19 +1023,52 @@
     const up = swing === 0;
     const tx = d >= 2 ? hx + fx * (up ? 1 : 3) : hx + (up ? 0 : 1), ty = up ? hy - 5 : hy - 1;
     for (let i = 0; i < 4; i++) rect(tx - (d === 3 ? -i * 0 : 0), ty + i, 1, 1, '#733e39');
-    const head = kind === 'axe' ? '#c0cbdc' : kind === 'pick' ? '#8b9bb4' : '#5a6988';
+    const head = kind === 'axe' || kind === 'bigaxe' ? '#c0cbdc' : kind === 'pick' ? '#8b9bb4' : '#5a6988';
+    if (kind === 'bigaxe') { rect(tx - (d === 3 ? 2 : 0), ty - 2, 3, 3, head); rect(tx, ty + 1, 1, 1, '#e4a672'); return; }   // pedra polida amarrada
     rect(tx - (kind === 'pick' ? 1 : 0), ty - 1, kind === 'pick' ? 3 : 2, 2, head);
   }
 
+  // o nível 1 de cada obra, para o fantasma de quem está marcando
+  function ghostImg(type) {
+    const S2 = A.spr;
+    if (type === 'fogueira') return { img: S2.fireOut, dy: -2 };
+    if (type === 'moquem') return { img: S2.moquem, dy: -2 };
+    if (type === 'jirau') return { img: S2.jirau, dy: 2 };
+    if (type === 'forno') return { img: S2.forno, dy: 1 };
+    const img = S2.shop[type] ? S2.shop[type][1] : S2.house[1];
+    return { img, dy: 31 - img.height };
+  }
   function drawGhost(S, g) {
     if (!S) return;
-    const S2 = A.spr;
-    const img = g.type === 'fogueira' ? S2.fireOut : S2.tent[g.type === 'barraca2' ? 'barraca2' : 'barraca'];
+    const gi = ghostImg(g.type);
     const def = C.BUILD[g.type];
-    blit(img, g.x * TS, g.y * TS + (g.type === 'fogueira' ? -2 : 1), 0.6);
+    blit(gi.img, g.x * TS, g.y * TS + gi.dy, 0.6);
     ctx.fillStyle = g.ok ? 'rgba(254,174,52,0.22)' : 'rgba(228,59,68,0.35)';
     ctx.fillRect(Math.round(g.x * TS * sc + ox), Math.round(g.y * TS * sc + oy), Math.round(def.w * TS * sc), Math.round(def.h * TS * sc));
     outline(g.x * TS, g.y * TS, def.w * TS, def.h * TS, g.ok ? '#feae34' : '#e43b44');
+    // o armazém tem que ficar perto do estoque: mostra até onde
+    if (def.near) {
+      const cx = (S.camp.x + 1) * TS * sc + ox, cy = (S.camp.y + 1) * TS * sc + oy;
+      ctx.save();
+      ctx.lineWidth = Math.max(1, dpr * 1.5);
+      ctx.setLineDash([4 * dpr, 4 * dpr]);
+      ctx.strokeStyle = 'rgba(254,174,52,0.8)';
+      ctx.beginPath(); ctx.arc(cx, cy, (def.near + 1) * TS * sc, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+  }
+  // pincel do caminho: os passos que o dedo (ou o mouse) está marcando
+  function drawBrush(S, br) {
+    const w = S.world;
+    const col = br.lv === 0 ? 'rgba(228,59,68,0.45)' : br.lv >= 3 ? 'rgba(192,203,220,0.55)' : 'rgba(210,160,110,0.55)';
+    for (const t of br.tiles) {
+      const x = t.i % w.W, y = (t.i / w.W) | 0;
+      rect(x * TS + 1, y * TS + 1, TS - 2, TS - 2, t.ok ? col : 'rgba(228,59,68,0.3)');
+    }
+    if (br.hover >= 0) {
+      const x = br.hover % w.W, y = (br.hover / w.W) | 0;
+      outline(x * TS, y * TS, TS, TS, br.hoverOk ? '#feae34' : '#e43b44');
+    }
   }
 
   function drawRing(r) {
@@ -712,9 +1088,55 @@
     ctx.restore();
   }
 
+  // Etapa 6: arco-íris, estrela cadente, araras e vaga-lumes (por cima da noite, para brilhar)
+  function drawSky(S, now) {
+    const l = S.life;
+    if (l && l.rainbowUntil > S.t) {
+      const left = (l.rainbowUntil - S.t) / 150, a = Math.min(1, left * 3, (1 - left) * 6) * 0.2;
+      const cx = W * 0.5, cy = H * 1.05, r0 = Math.max(W, H) * 0.62, band = Math.max(3, 5 * dpr);
+      const cols = ['#e43b44', '#f77622', '#fee761', '#63c74d', '#0099db', '#68386c'];
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.lineWidth = band;
+      cols.forEach((c, i) => { ctx.strokeStyle = c; ctx.beginPath(); ctx.arc(cx, cy, r0 - i * band, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke(); });
+      ctx.restore();
+    }
+    for (let i = stars.length - 1; i >= 0; i--) {
+      const s = stars[i], t = (now - s.t0) / 900;
+      if (t > 1) { stars.splice(i, 1); continue; }
+      const x = s.x + s.dx * t, y = s.y + s.dy * t, px = Math.max(2, Math.round(dpr * 2));
+      for (let k = 0; k < 12; k++) {
+        const f = k / 12;
+        ctx.fillStyle = 'rgba(255,250,220,' + ((1 - f) * (1 - t * 0.6)).toFixed(3) + ')';
+        ctx.fillRect(Math.round(x - s.dx * 0.05 * k), Math.round(y - s.dy * 0.05 * k), px, px);
+      }
+    }
+    for (let i = flocks.length - 1; i >= 0; i--) {
+      const f = flocks[i], t = (now - f.t0) / 5000;
+      if (t > 1) { flocks.splice(i, 1); continue; }
+      const span = W + 300 * dpr;
+      for (const b of f.birds) {
+        const x0 = -150 * dpr + span * t + b.dx, x = f.fromLeft ? x0 : W - x0, y = f.y0 + b.dy - t * 60 * dpr + Math.sin(now / 300 + b.ph) * 4 * dpr;
+        const img = A.spr.arara[b.k][Math.floor(now / 160 + b.ph) % 2], s2 = Math.max(2, Math.round(sc * 0.9));
+        ctx.save();
+        if (!f.fromLeft) { ctx.translate(Math.round(x), Math.round(y)); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0, img.width * s2, img.height * s2); }
+        else ctx.drawImage(img, Math.round(x), Math.round(y), img.width * s2, img.height * s2);
+        ctx.restore();
+      }
+    }
+    for (const g of glows) {
+      const on = Math.sin(now / 180 + g.ph) > 0.2;
+      if (!on) continue;
+      const x = g.x * sc + ox, y = g.y * sc + oy, r = Math.max(2, sc);
+      ctx.fillStyle = 'rgba(200,255,120,0.9)'; ctx.fillRect(Math.round(x), Math.round(y), r, r);
+      ctx.fillStyle = 'rgba(200,255,120,0.25)'; ctx.fillRect(Math.round(x - r), Math.round(y - r), r * 3, r * 3);
+    }
+  }
+
   function drawLight(S, now) {
     const h = S.ck.hour;
     let dark = darkness(h);
+    if (G.Life && S.life && G.Life.moonUp(S) && !S.precip) dark *= 0.7;   // lua cheia: a noite clareia
     if (S.precip) dark = Math.max(dark, S.precip === 'chuva' ? 0.24 : 0.16);
     const Nr = G.Narr;
     if (Nr && Nr.is(S, 'tempestade')) dark = Math.max(dark, 0.36);
@@ -738,7 +1160,7 @@
     for (const b of fires) {
       const fl = 1 + Math.sin(now / 90 + b.id) * 0.04 + Math.sin(now / 37) * 0.02;
       const cx = ((b.x + 0.5) * TS * sc + ox) / 4, cy = ((b.y + 0.4) * TS * sc + oy) / 4;
-      const r = TS * sc * 5.2 * fl / 4;
+      const r = TS * sc * (G.Sim.def(b).fire.r + 0.2) * fl / 4;   // a fogueira maior clareia mais longe
       const steps = [[1.0, 0.35], [0.72, 0.7], [0.45, 1]];
       for (const [f, a] of steps) {
         lctx.fillStyle = 'rgba(0,0,0,' + a + ')';
@@ -752,7 +1174,7 @@
     ctx.globalCompositeOperation = 'lighter';
     for (const b of fires) {
       const cx = (b.x + 0.5) * TS * sc + ox, cy = (b.y + 0.4) * TS * sc + oy;
-      const r = TS * sc * 3.2;
+      const r = TS * sc * (G.Sim.def(b).fire.r - 1.8);
       const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
       g.addColorStop(0, 'rgba(247,118,34,' + (0.22 * dark / 0.64).toFixed(3) + ')');
       g.addColorStop(1, 'rgba(247,118,34,0)');
@@ -776,7 +1198,7 @@
     // tempestade: relâmpagos
     if (storm) {
       flashWait -= dt;
-      if (flashWait <= 0) { flash = 0.14; flashWait = 2.5 + Math.random() * 5; }
+      if (flashWait <= 0) { flash = 0.14; flashWait = 2.5 + Math.random() * 5; if (G.Audio) G.Audio.sfx('trovao', undefined, undefined, 0.6, 0.25 + Math.random() * 0.6); }
       if (flash > 0) { ctx.fillStyle = 'rgba(235,240,255,' + (flash * 2.2).toFixed(2) + ')'; ctx.fillRect(0, 0, W, H); flash -= dt; }
     }
     // nevasca: tudo branco de vento

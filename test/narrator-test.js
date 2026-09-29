@@ -7,7 +7,7 @@
 const path = require('path');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 globalThis.G = {};
-for (const f of ['core', 'config', 'world', 'sim', 'family', 'ai', 'god', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
+for (const f of ['core', 'config', 'world', 'sim', 'family', 'life', 'tech', 'invencoes', 'obras', 'fauna', 'ai', 'god', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
 const { W, Sim, CFG: C, Family: F, God, Narr: N, Save, AI } = G;
 const Y = 60 * 1440, D = 1440;
 
@@ -25,7 +25,7 @@ function longRun(seed, kind, years) {
     if (d % 3 === 0) {
       const need = F.bedsNeeded(S), have = F.bedsTotal(S), pend = S.buildings.some((b) => !b.built || b.up);
       if (!pend && have < need + 1 && S.stock.madeira >= 14) place('barraca');
-      else if (!pend && S.stock.pedra >= 8 && S.stock.madeira >= 12 && have < need + 1) { const b = S.buildings.find((x) => x.built && x.type === 'barraca'); if (b) Sim.startUpgrade(S, b); }
+      else if (!pend && S.stock.pedra >= 8 && S.stock.madeira >= 12 && have < need + 1) { const b = S.buildings.find((x) => x.built && x.type === 'barraca' && (x.lv || 1) === 1 && !x.up); if (b) Sim.startUpgrade(S, b); }
       Object.assign(S.vontades, S.ck.season >= 2 ? { madeira: 3, pesca: 3, frutas: 2 } : { madeira: 2, pesca: 3, frutas: 3 });
       S.vontades.pedra = S.stock.pedra < 10 ? 2 : 1;
     }
@@ -255,7 +255,7 @@ const arrivals = S.people.slice(before9);
 const boy = arrivals.find((p) => p.mother && p.father);
 const [ma, pa] = boy ? [F.person(S, boy.mother), F.person(S, boy.father)] : [];
 check('chega um casal com um filho do gênero oposto e todos são acolhidos', arrivals.length === 3 && !!boy && boy.sex === 'M' && F.age(S, boy) >= 17 && F.age(S, boy) <= 20 &&
-  ma && pa && ma.partner === pa.id && pa.partner === ma.id && S.narr.couple.state === 'acolhido', arrivals.map((p) => p.name + ' ' + F.age(S, p)).join(', '));
+  ma && pa && F.isPartner(ma, pa) && F.isPartner(pa, ma) && S.narr.couple.state === 'acolhido', arrivals.map((p) => p.name + ' ' + F.age(S, p)).join(', '));
 check('o rapaz não é parente da primogênita (sangue novo)', boy && !F.closeKin(S, boy, first));
 
 // 10. save com lobos e viajantes no mapa

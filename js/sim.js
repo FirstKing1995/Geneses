@@ -52,13 +52,40 @@
     perdeuBebe: { t: 'Perdeu um bebê', v: -30, d: 45 * 1440 },
     perdeuCompanheiro: { t: 'Perdeu quem amava', v: -30, d: 60 * 1440 },
     perdeuFamilia: { t: 'Perdeu alguém da família', v: -30, d: 60 * 1440 },
-    curado: { t: 'Foi curado por Deus', v: 10, d: 3 * 1440 },
+    curado: { t: 'Foi curado por Deus', tf: 'Foi curada por Deus', v: 10, d: 3 * 1440 },
     brincou: { t: 'Brincou', v: 4, d: 720 },
-    mordido: { t: 'Foi mordido por um lobo', v: -12, d: 3 * 1440 },
-    acolhido: { t: 'Foi acolhido pelo povo', v: 10, d: 5 * 1440 },
+    mordido: { t: 'Foi mordido por um lobo', tf: 'Foi mordida por um lobo', v: -12, d: 3 * 1440 },
+    acolhido: { t: 'Foi acolhido pelo povo', tf: 'Foi acolhida pelo povo', v: 10, d: 5 * 1440 },
     chegouGente: { t: 'Chegou gente nova', v: 4, d: 2 * 1440 },
     fartura: { t: 'Tempo de fartura', v: 4, d: 3 * 1440 },
     mel: { t: 'Comeu mel', v: 5, d: 1440 },
+    carneCrua: { t: 'Comeu carne crua', v: -3, d: 720 },
+    descobriu: { t: 'Descobriu algo novo', v: 10, d: 5 * 1440 },
+    aprendeu: { t: 'Aprendeu algo novo', v: 4, d: 2 * 1440 },
+    // Etapa 6: a vida do povo
+    ouviuHistoria: { t: 'Ouviu uma história ao pé do fogo', v: 5, d: 1440 },
+    contouHistoria: { t: 'Contou uma história', v: 5, d: 1440 },
+    festa: { t: 'Dançou na festa', v: 8, d: 3 * 1440 },
+    consolado: { t: 'Foi consolado no luto', tf: 'Foi consolada no luto', v: 10, d: 5 * 1440 },
+    consolou: { t: 'Consolou quem sofria', v: 3, d: 2 * 1440 },
+    brigou: { t: 'Brigou com alguém', v: -6, d: 2 * 1440 },
+    fezPazes: { t: 'Fez as pazes', v: 6, d: 2 * 1440 },
+    aprendeuCom: { t: 'Aprendeu com os mais velhos', v: 4, d: 2 * 1440 },
+    ensinou: { t: 'Ensinou quem está aprendendo', v: 4, d: 2 * 1440 },
+    viuEstrela: { t: 'Viu uma estrela cadente', v: 4, d: 1440 },
+    arcoIris: { t: 'Viu um arco-íris', v: 4, d: 1440 },
+    luaCheia: { t: 'Noite de lua cheia', v: 3, d: 1440 },
+    peTorcido: { t: 'Torceu o pé', v: -4, d: 1440 },
+    passaros: { t: 'Viu as araras passarem', v: 2, d: 720 },
+    sonhoBom: { t: 'Teve um sonho bonito', v: 4, d: 1440 },
+    cantou: { t: 'Cantou com os outros', v: 4, d: 1440 },
+    novoPar: { t: 'Encontrou um novo amor', v: 10, d: 5 * 1440 },
+    agradeceu: { t: 'Agradeceu ao céu', v: 3, d: 1440 },
+    // Etapa 8: invenções
+    ouviuFlauta: { t: 'Ouviu a flauta ao pé do fogo', v: 6, d: 1440 },
+    tocouFlauta: { t: 'Tocou flauta para o povo', v: 6, d: 1440 },
+    festaTambor: { t: 'Dançou ao som do tambor', v: 10, d: 3 * 1440 },
+    comeuCozido: { t: 'Comeu um cozido quente', v: 6, d: 1440 },
   };
   Sim.MEM = MEM; Sim.TRAIT_DESC = TRAIT_DESC;
 
@@ -133,10 +160,10 @@
     let best = 0;
     for (const b of S.buildings) {
       if (b.type !== 'fogueira' || !b.built || b.fuel <= 0) continue;
-      const d = Math.hypot(b.x + 0.5 - x, b.y + 0.5 - y);
+      const d = Math.hypot(b.x + 0.5 - x, b.y + 0.5 - y), R = Sim.def(b).fire.r;
       let h = 0;
       if (d <= C.FIRE_FULL_R) h = C.FIRE_HEAT;
-      else if (d < C.FIRE_MAX_R) h = C.FIRE_HEAT * (C.FIRE_MAX_R - d) / (C.FIRE_MAX_R - C.FIRE_FULL_R);
+      else if (d < R) h = C.FIRE_HEAT * (R - d) / (R - C.FIRE_FULL_R);
       if (h > best) best = h;
     }
     return best;
@@ -147,7 +174,8 @@
     if (p.carriedBy) { const c = G.Family.carrierOf(S, p); if (c && c.alive) return (c.tempHere !== undefined ? c.tempHere : 16) + 3; }
     const fh = fireHeat(S, p.x, p.y) * (p.sleeping && !p.inTent && p.fireShare !== undefined ? p.fireShare : 1);
     let t0 = tileTemp(S, Math.floor(p.y) * w.W + Math.floor(p.x)) + Math.max(fh, G.God.heatAt(S, p.x, p.y));
-    if (p.inTent) { const b = Sim.building(S, p.inTent); if (b && b.built) t0 += C.BUILD[b.type].heat; }
+    if (p.inTent) { const b = Sim.building(S, p.inTent); if (b && b.built) t0 += Sim.def(b).heat || 0; }
+    if (p.sleeping && p.manta) t0 += C.MANTA_HEAT;   // Etapa 7: manta tecida
     return t0;
   }
   Sim.personTemp = personTemp;
@@ -187,24 +215,53 @@
     return {
       id: S.nextPid++, name, sex, born: S.t - age * C.DAY_MIN * C.YEAR_DAYS - rng.int(0, C.YEAR_DAYS - 1) * C.DAY_MIN,
       traits: pickTraits(rng),
-      skills: { coleta: 0, pesca: 0, construcao: 0 },
+      skills: { coleta: 0, pesca: 0, construcao: 0, caca: 0, oficio: 0 }, tool: null, roupa: null,
       needs: { fome: 80 + rng.range(0, 10), sede: 75 + rng.range(0, 10), energia: 88, calor: 90, social: 70, saude: 100 },
       mood: 60, mem: [], x: 0, y: 0, px: 0, py: 0, dir: 0, walk: 0,
       path: null, pathI: 0, act: null, carry: null, alive: true, cause: '', diedAt: 0,
       sleeping: false, inTent: 0, say: null, sayId: 0, sayAt: -999, nextEval: 0, fail: {}, chatCool: 0, rel: {},
       dmg: { fome: 0, sede: 0, frio: 0 }, look: makeLook(rng, sex), tempHere: 16, touched: false, warned: {},
+      bonds: {}, feud: {},   // Etapa 6: pares (id: afeto) e brigas (id: até quando)
     };
   }
 
   Sim.makePerson = makePerson;
+  // Ato 1: as cinco metas que abrem a próxima fase e missões menores (opt), todas com recompensa em Poder (Etapa 6).
+  // Missão que sobra passa para a fase seguinte.
   function makeGoals() {
     return [
-      { id: 'fogo', text: 'Acenda a primeira fogueira', done: false },
-      { id: 'barraca', text: 'Construa uma barraca', done: false },
-      { id: 'comida', text: 'Guarde ' + C.GOAL_FOOD + ' porções de comida', done: false },
-      { id: 'lenha', text: 'Guarde ' + C.GOAL_WOOD + ' de madeira', done: false },
-      { id: 'inverno', text: 'Sobreviva ao primeiro inverno', done: false },
+      { id: 'olhar', text: 'Toque em alguém para ver o que sente', opt: true, reward: 3, done: false },
+      { id: 'fogo', text: 'Acenda a primeira fogueira', reward: 6, done: false },
+      { id: 'vontade', text: 'Mude uma Vontade', opt: true, reward: 2, done: false },
+      { id: 'frutas20', text: 'Colha 20 frutas', opt: true, reward: 3, done: false },
+      { id: 'agua10', text: 'Guarde 10 cabaças de água', opt: true, reward: 3, done: false },
+      { id: 'barraca', text: 'Construa uma barraca', reward: 8, done: false },
+      { id: 'peixe5', text: 'Pesque 5 peixes', opt: true, reward: 4, done: false },
+      { id: 'milagre', text: 'Faça um milagre', opt: true, reward: 4, done: false },
+      { id: 'historia', text: 'Ouça uma história ao pé do fogo', opt: true, reward: 4, done: false },
+      { id: 'comida', text: 'Guarde ' + C.GOAL_FOOD + ' porções de comida', reward: 8, done: false },
+      { id: 'lenha', text: 'Guarde ' + C.GOAL_WOOD + ' de madeira', reward: 6, done: false },
+      { id: 'oracao', text: 'Atenda a uma oração', opt: true, reward: 6, done: false },
+      { id: 'inverno', text: 'Sobreviva ao primeiro inverno', reward: 15, done: false },
     ];
+  }
+  Sim.makeGoals = makeGoals;
+  // recompensa das metas das outras fases (e dos saves antigos)
+  const REWARD = { filho: 10, camas: 6, estoque: 6, ajuda: 8, povo: 12, festa: 5, ensino: 4,
+    d_pedra: 6, d_ferramentas: 6, d_conserva: 8, d_roupas: 8, d_ceramica: 10, d_aldeia: 15,
+    o_fogueira: 4, o_caminho: 3, o_armazem: 5, o_tabuas: 4, o_casa: 12, o_oficinas: 8, o_mantas: 8, o_caminhos: 6, o_melhorias: 10,
+    i_faca: 4, i_corda: 4, i_tres: 6, i_arco: 6, i_tambor: 6, i_todas: 15 };
+  function fixGoals(S) {
+    // save da 0.5 no Ato 1: a lista nova, com o que já estava feito
+    if ((S.goalsPhase || 1) === 1 && !S.goals.some((g) => g.id === 'olhar')) {
+      const done = new Set(S.goals.filter((g) => g.done).map((g) => g.id));
+      S.goals = makeGoals();
+      for (const g of S.goals) if (done.has(g.id)) { g.done = true; g.paid = true; }
+    }
+    for (const g of S.goals) {
+      if (g.reward === undefined) g.reward = REWARD[g.id] || 0;
+      if (g.done && g.paid === undefined) g.paid = true;   // o que já foi feito antes da recompensa existir não paga de novo
+    }
   }
 
   Sim.newGame = function (seed, site, names, world) {
@@ -264,9 +321,10 @@
     const ex = p.mem.find((m) => m.k === k);
     if (ex) ex.until = S.t + def.d; else p.mem.push({ k, until: S.t + def.d });
   };
-  Sim.say = function (S, p, text, force) {
+  // kind: o jeito do balão (god, briga, festa, casal, historia, consolo)
+  Sim.say = function (S, p, text, force, kind) {
     if (!force && S.t - p.sayAt < 40) return;
-    p.say = text; p.sayId++; p.sayAt = S.t;
+    p.say = text; p.sayId++; p.sayAt = S.t; p.sayKind = kind || '';
   };
   Sim.toast = function (S, text, tone) { S.events.push({ k: 'toast', text, tone: tone || '' }); };
   Sim.chron = function (S, text) { S.chron.push({ t: S.t, text }); S.events.push({ k: 'chron', text }); };
@@ -274,8 +332,57 @@
 
   // ---------- construções ----------
   Sim.building = function (S, id) { for (const b of S.buildings) if (b.id === id) return b; return null; };
+  // Etapa 7: a definição da obra no nível dela. O nível 1 é o BUILD; cada melhoria troca o que muda;
+  // no nível 3 da barraca entra a casa escolhida (HOUSES)
+  const defCache = {};
+  Sim.defOf = function (type, lv, kind) {
+    lv = lv || 1;
+    const key = type + ':' + lv + ':' + (kind || '');
+    if (defCache[key]) return defCache[key];
+    const base = C.BUILD[type];
+    if (!base) return null;
+    const d = Object.assign({}, base);
+    delete d.up;
+    for (let i = 2; i <= lv; i++) {
+      const u = base.up && base.up[i - 2];
+      if (!u) break;
+      if (u.choose) { const h = C.HOUSES[kind]; if (h) Object.assign(d, h); }
+      else Object.assign(d, u);
+    }
+    d.type = type; d.lv = lv; d.kind = kind || null;
+    d.max = !(base.up && base.up[lv - 1]);   // último nível
+    defCache[key] = d;
+    return d;
+  };
+  Sim.def = (b) => Sim.defOf(b.type, b.lv, b.kind);
+  // o que a obra ainda pede para poder ser marcada (vazio = pode): descoberta, obra no acampamento, material que ainda não existe
+  Sim.needWhy = function (S, d) {
+    const T = G.Tech;
+    if (d.need && !T.known(S, d.need)) return 'pede ' + T.DISC[d.need].name.toLowerCase();
+    const has = (t) => S.buildings.some((x) => x.built && x.type === t);
+    if (d.needB && !has(d.needB)) return 'pede ' + (C.BUILD[d.needB].a === 'o' ? 'um ' : 'uma ') + C.BUILD[d.needB].name.toLowerCase();
+    const cost = d.cost || {};
+    if (cost.tabuas && !has('marcenaria')) return 'pede tábuas: construa uma marcenaria';
+    if (cost.fibra && !T.known(S, 'cestos')) return 'pede fibra: vem com os cestos';
+    if (cost.argila && !T.known(S, 'ceramica')) return 'pede argila: vem com a cerâmica';
+    return '';
+  };
+  // melhorias possíveis de uma obra pronta: [{ lv, kind, def, why }] (why vazio = dá para marcar)
+  Sim.upgrades = function (S, b) {
+    if (!b.built || b.up) return [];
+    const base = C.BUILD[b.type], lv = b.lv || 1;
+    const u = base && base.up && base.up[lv - 1];
+    if (!u) return [];
+    return (u.choose || [null]).map((kind) => {
+      const d = Sim.defOf(b.type, lv + 1, kind);
+      let why = Sim.needWhy(S, d);
+      if (!why && kind && G.Obras && !G.Obras.envOk(S, b, C.HOUSES[kind].env)) why = 'pede ' + C.ENV[C.HOUSES[kind].env].name;
+      return { lv: lv + 1, kind, def: d, why };
+    });
+  };
   Sim.canPlace = function (S, type, x, y) {
     const def = C.BUILD[type], w = S.world;
+    if (def.near && Math.hypot(x + def.w / 2 - S.camp.x - 1, y + def.h / 2 - S.camp.y - 1) > def.near + 1) return 'Longe do estoque: tem que ficar a até ' + def.near + ' passos';
     for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
       const tx = x + dx, ty = y + dy;
       if (tx < 1 || ty < 1 || tx >= w.W - 1 || ty >= w.H - 1) return 'Fora do mapa';
@@ -292,12 +399,14 @@
   Sim.placeBlueprint = function (S, type, x, y) {
     if (Sim.canPlace(S, type, x, y)) return null;
     const def = C.BUILD[type], w = S.world;
-    const b = { id: S.nextBid++, type, x, y, w: def.w, h: def.h, built: false, progress: 0,
-      have: { madeira: 0, pedra: 0 }, fuel: 0, beds: [], up: null };
+    const b = { id: S.nextBid++, type, lv: 1, kind: null, x, y, w: def.w, h: def.h, built: false, progress: 0,
+      have: {}, fuel: 0, beds: [], up: null };
+    for (const k of C.MATERIALS) b.have[k] = 0;
     for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
       const i = (y + dy) * w.W + x + dx;
       const o = G.W.objAt(w, i);
       if (o) G.W.removeObj(w, o);
+      if (G.Obras) G.Obras.clearTile(S, i);   // a obra toma o lugar do caminho (e do caminho marcado)
       w.bgrid[i] = b.id; G.W.refreshBlock(w, i);
     }
     S.buildings.push(b);
@@ -308,8 +417,9 @@
     const w = S.world;
     // devolve material entregue
     const src = b.up ? b.up.have : b.built ? null : b.have;
-    if (src) { S.stock.madeira += src.madeira; S.stock.pedra += src.pedra; }
+    if (src) for (const k of C.MATERIALS) S.stock[k] += src[k] || 0;
     if (b.up) { b.up = null; Sim.refresh(S); return; }
+    if (b.batch) { S.stock[b.batch.k] += b.batch.n; b.batch = null; }   // a carga do moquém ou do jirau volta crua
     for (const p of S.people) {
       if (p.inTent === b.id) { G.AI.abort(S, p); p.inTent = 0; }
       if (p.act && p.act.b === b.id) G.AI.abort(S, p);
@@ -321,35 +431,49 @@
     S.buildings.splice(S.buildings.indexOf(b), 1);
     Sim.refresh(S);
   };
-  Sim.startUpgrade = function (S, b) {
-    if (!b.built || b.up) return false;
-    const to = Object.keys(C.BUILD).find((k) => C.BUILD[k].from === b.type);
-    if (!to) return false;
-    b.up = { to, have: { madeira: 0, pedra: 0 }, progress: 0 };
+  // marca a melhoria (kind: a casa escolhida; sem kind, a primeira que dá)
+  Sim.startUpgrade = function (S, b, kind) {
+    const opts = Sim.upgrades(S, b).filter((o) => !o.why);
+    const o = kind ? opts.find((x) => x.kind === kind) : opts[0];
+    if (!o) return false;
+    b.up = { lv: o.lv, kind: o.kind || null, have: {}, progress: 0 };
+    for (const k of C.MATERIALS) b.up.have[k] = 0;
     Sim.refresh(S);
     return true;
   };
+  Sim.upDef = (b) => (b.up ? Sim.defOf(b.type, b.up.lv, b.up.kind) : null);
   // obra em andamento: projeto novo ou melhoria
   Sim.jobOf = function (b) {
     if (!b.built) { const d = C.BUILD[b.type]; return { b, cost: d.cost, have: b.have, work: d.work, get progress() { return b.progress; }, set progress(v) { b.progress = v; } }; }
-    if (b.up) { const d = C.BUILD[b.up.to]; return { b, cost: d.cost, have: b.up.have, work: d.work, get progress() { return b.up.progress; }, set progress(v) { b.up.progress = v; } }; }
+    if (b.up) { const d = Sim.upDef(b); return { b, cost: d.cost, have: b.up.have, work: d.work, get progress() { return b.up.progress; }, set progress(v) { b.up.progress = v; } }; }
     return null;
   };
   Sim.missing = function (job) {
-    const out = { madeira: 0, pedra: 0 };
+    const out = {};
+    for (const k of C.MATERIALS) out[k] = 0;
     for (const k in job.cost) out[k] = Math.max(0, job.cost[k] - (job.have[k] || 0));
     return out;
   };
   Sim.complete = function (S, b) {
     if (b.up) {
-      b.type = b.up.to; b.up = null;
-      Sim.chron(S, 'A barraca virou ' + C.BUILD[b.type].name.toLowerCase() + '.');
+      const from = Sim.def(b);
+      b.lv = b.up.lv; b.kind = b.up.kind || b.kind || null; b.up = null;
+      const d = Sim.def(b);
+      Sim.chron(S, (from.a === 'o' ? 'O ' : 'A ') + from.name.toLowerCase() + ' virou ' + d.name.toLowerCase() + '.');
+      if (G.Obras) G.Obras.onUpgraded(S, b, from);
     } else {
       b.built = true; b.progress = 1;
       if (b.type === 'fogueira') {
         b.fuel = 3;
-        if (!S.stats.firstFire) { S.stats.firstFire = true; Sim.chron(S, 'A primeira fogueira foi acesa.'); S.people.forEach((p) => p.alive && Sim.addMem(S, p, 'fogueira')); }
+        if (!S.stats.firstFire) {
+          S.stats.firstFire = true; Sim.chron(S, 'A primeira fogueira foi acesa.'); S.people.forEach((p) => p.alive && Sim.addMem(S, p, 'fogueira'));
+          if (G.Life) G.Life.onFirstFire(S);
+        }
         else Sim.toast(S, 'Fogueira pronta.');
+      } else if (G.Tech && G.Tech.onBuilt(S, b)) {
+        // moquém, jirau e forno: a Tech conta a história
+      } else if (G.Obras && G.Obras.onBuilt(S, b)) {
+        // armazém, marcenaria e tecelagem (Etapa 7)
       } else {
         if (!S.stats.firstTent) { S.stats.firstTent = true; Sim.chron(S, 'Ergueram a primeira barraca.'); }
         else Sim.toast(S, C.BUILD[b.type].name + ' pronta.');
@@ -369,25 +493,39 @@
     ctx.hour = ck.hour;
     ctx.night = ck.hour >= 21 || ck.hour < 5;
     ctx.evening = ck.hour >= 19 && ck.hour < 21;
-    ctx.food = st.frutas + st.peixe;
+    let food = 0, fv = 0;
+    for (const k of G.Tech.FOOD) { const n = st[k] || 0; food += n; fv += n * G.Tech.foodValue(k, S); }
+    ctx.food = food;
     ctx.mouths = G.Family.mouths(S);
-    ctx.foodDays = (st.frutas * C.FRUIT_FOOD + st.peixe * C.FISH_COOKED) / (ctx.mouths * C.HUNGER_H * 24);
+    ctx.foodDays = fv / (ctx.mouths * C.HUNGER_H * 24);
     let fire = null, lit = false, tents = 0;
     for (const b of S.buildings) {
       if (b.type === 'fogueira' && b.built) { if (b.fuel > 0) lit = true; if (!fire || b.fuel < fire.fuel) fire = b; }
-      if ((b.type === 'barraca' || b.type === 'barraca2') && b.built) tents++;
+      if (b.built && Sim.def(b).cap) tents++;
     }
     ctx.fire = fire; ctx.fireLit = lit; ctx.tents = tents;
     const nightH = ck.hour >= 18 || ck.hour < 7;
     const cold = S.temp < 13 || (nightH && S.temp < 16) || (S.precip && S.temp < 20);
     // com frio, ou com lobos rondando (o fogo espanta), a fogueira não pode apagar
     ctx.fireNeedsFuel = !!(fire && fire.fuel <= C.FIRE_REFUEL_AT && st.madeira > 0 && (cold || (G.Narr && G.Narr.wantFire(S))));
-    let job = null;
-    for (const b of S.buildings) { const j = Sim.jobOf(b); if (j) { job = j; break; } }
+    // obra da vez: a primeira que dá para tocar (material entregue ou no estoque); senão, a primeira da fila
+    let job = null, needs = null, doable = false;
+    const short = {};
+    for (const k of C.MATERIALS) short[k] = 0;
+    for (const b of S.buildings) {
+      const j = Sim.jobOf(b);
+      if (!j) continue;
+      const m = Sim.missing(j);
+      let sum = 0, can = false;
+      for (const k of C.MATERIALS) { sum += m[k]; short[k] += m[k]; if (m[k] > 0 && st[k] > 0) can = true; }
+      const ok = sum === 0 || can;
+      if (!job || (ok && !doable)) { job = j; needs = m; doable = ok; }
+    }
+    for (const k of C.MATERIALS) short[k] = Math.max(0, short[k] - (st[k] || 0));
     ctx.job = job;
-    ctx.jobNeeds = job ? Sim.missing(job) : { madeira: 0, pedra: 0 };
-    ctx.jobDoable = !!job && ((ctx.jobNeeds.madeira + ctx.jobNeeds.pedra === 0) ||
-      (ctx.jobNeeds.madeira > 0 && st.madeira > 0) || (ctx.jobNeeds.pedra > 0 && st.pedra > 0));
+    ctx.jobNeeds = needs || Object.assign({}, short, { madeira: 0, pedra: 0, argila: 0, tabuas: 0, fibra: 0 });
+    ctx.jobDoable = doable;
+    ctx.matShort = short;   // o que falta no estoque para todas as obras marcadas
   };
   function countBushFruit(S) {
     let n = 0;
@@ -408,15 +546,18 @@
     if (baby) { n.energia = 100; n.social = 100; }
     else if (p.sleeping) {
       let rate = C.SLEEP_GROUND_H;
-      if (p.inTent) { const b = Sim.building(S, p.inTent); rate = b && b.type === 'barraca2' ? C.SLEEP_TENT2_H : C.SLEEP_TENT_H; }
+      if (p.inTent) { const b = Sim.building(S, p.inTent); rate = (b && Sim.def(b).sleep) || C.SLEEP_TENT_H; }
+      if (p.rede) rate *= C.REDE_SLEEP;   // Etapa 7: rede tecida
       n.energia += rate * h;
     } else n.energia -= C.ENERGY_H * h * mm.energia;
     if (baby) { /* no colo, sempre acompanhado */ }
     else if (p.act && p.act.type === 'conversar' && p.act.chat && p.act.chat.on) n.social += C.CHAT_SOCIAL_H * h;
     else if (p.act && p.act.type === 'brincar' && p.act.stage === 'play') n.social += C.CHAT_SOCIAL_H * 0.5 * h;
+    else if (p.act && ((p.act.type === 'ouvir' && p.act.stage === 'listen') || (p.act.type === 'historia' && p.act.stage === 'tell') ||
+      (p.act.type === 'festa' && p.act.stage === 'dance'))) n.social += C.CHAT_SOCIAL_H * 0.8 * h;   // história e festa: companhia de todos
     else n.social -= C.SOCIAL_H * h;
     const tp = p.tempHere = personTemp(S, p);
-    const cm = (has(p, 'Friorento') ? 1.3 : has(p, 'Resistente ao frio') ? 0.7 : 1) * mm.frio;
+    const cm = (has(p, 'Friorento') ? 1.3 : has(p, 'Resistente ao frio') ? 0.7 : 1) * mm.frio * G.Tech.coldMult(p, S);   // roupa de couro (costurada, com a agulha, esquenta mais)
     const deficit = C.COMFORT - tp;
     if (deficit > 0) {
       const floor = Math.max(0, 100 - deficit * C.COLD_SLOPE * cm);
@@ -491,16 +632,23 @@
       } else if (o.k === 'stump') {
         o.regrow = (o.regrow || 0) + 1;
         const i = o.y * w.W + o.x;
-        if (o.regrow >= C.TREE_REGROW_DAYS && w.bgrid[i] < 0 && !Sim.isCamp(S, i) &&
+        // no caminho, na trilha e no caminho marcado a árvore não volta (Etapa 7)
+        if (o.regrow >= C.TREE_REGROW_DAYS && w.bgrid[i] < 0 && !Sim.isCamp(S, i) && !(w.road && (w.road[i] || w.roadJob[i])) &&
           !S.people.some((p) => p.alive && Math.floor(p.x) === o.x && Math.floor(p.y) === o.y)) {
           o.k = 'tree'; o.regrow = 0; G.W.refreshBlock(w, i);
         }
       }
     }
-    // comida estraga no estoque: calor apressa, frio conserva
-    const rm = C.ROT_SEASON[ck.season];
-    rot(S, 'frutas', C.ROT_FRUIT * rm);
-    rot(S, 'peixe', C.ROT_FISH * rm);
+    // comida estraga no estoque: calor apressa, frio conserva; defumado e fruta seca quase não; potes de barro ajudam
+    const rm = C.ROT_SEASON[ck.season] * (G.Obras ? G.Obras.storeMult(S) : 1), Te = G.Tech;   // o armazém guarda melhor (Etapa 7)
+    let lost = 0;
+    lost += rot(S, 'frutas', C.ROT_FRUIT * rm * Te.rotMult(S, 'frutas'));
+    lost += rot(S, 'peixe', C.ROT_FISH * rm * Te.rotMult(S, 'peixe'));
+    lost += rot(S, 'carne', C.ROT_MEAT * rm * Te.rotMult(S, 'carne'));
+    lost += rot(S, 'defumado', C.ROT_DEFUMADO * rm);
+    lost += rot(S, 'seca', C.ROT_SECA * rm);
+    S.stats.rottedToday = lost;
+    Te.onRot(S, lost);   // ver comida estragar ensina a conservar
     const season = C.SEASONS[ck.season];
     if (ck.dos === 1 && ck.day > 0) {
       if (ck.season === 3) Sim.chron(S, S.stats.winters === 0 ? 'Chegou o primeiro inverno.' : 'Começou o inverno.');
@@ -509,23 +657,27 @@
         const alive = S.people.filter((p) => p.alive);
         if (S.stats.winters === 1 && alive.length) Sim.chron(S, 'O primeiro inverno terminou. ' + listNames(alive) + (alive.length > 1 ? ' sobreviveram.' : ' sobreviveu.'));
         else Sim.toast(S, 'Começou a ' + season.toLowerCase() + '.');
+        if (G.Life && alive.length) G.Life.onSpring(S);   // agradecem pelo inverno vencido e fazem festa
       } else Sim.toast(S, 'Começou o ' + season.toLowerCase() + '.');
     }
     const dw = Sim.daysToWinter(S);
     if (dw === 10 || dw === 5) Sim.toast(S, 'O inverno chega em ' + dw + ' dias. Estoque comida e lenha.', 'warn');
     G.Family.daily(S);
     if (G.Narr) G.Narr.daily(S);
+    G.Tech.daily(S);
+    if (G.Obras) G.Obras.daily(S);
+    if (G.Fauna) G.Fauna.daily(S);
+    if (G.Life) G.Life.daily(S);
   }
   function rot(S, k, rate) {
     const acc = S.stats.rotAcc || (S.stats.rotAcc = {});
-    acc[k] = (acc[k] || 0) + S.stock[k] * rate;
+    acc[k] = (acc[k] || 0) + (S.stock[k] || 0) * rate;
     const n = Math.floor(acc[k]);
-    if (n > 0) {
-      const lost = Math.min(n, S.stock[k]);
-      S.stock[k] -= lost; acc[k] -= n;
-      S.stats.rotted = (S.stats.rotted || 0) + lost;
-      S.stats.rottedToday = lost;
-    } else S.stats.rottedToday = 0;
+    if (n <= 0) return 0;
+    const lost = Math.min(n, S.stock[k]);
+    S.stock[k] -= lost; acc[k] -= n;
+    S.stats.rotted = (S.stats.rotted || 0) + lost;
+    return lost;
   }
   function listNames(arr) {
     const n = arr.map((p) => p.name);
@@ -541,42 +693,89 @@
     for (const p of S.people) if (p.alive) hourlyPerson(S, p);
     G.Family.hourly(S);
     if (G.Narr) G.Narr.hourly(S);
+    G.Tech.hourly(S);
+    if (G.Obras) G.Obras.hourly(S);
+    if (G.Life) G.Life.hourly(S);
     checkGoals(S);
   }
 
+  const GOAL_TEST = {
+    fogo: (S) => S.stats.firstFire,
+    barraca: (S) => S.stats.firstTent,
+    comida: (S) => S.ctx.food >= C.GOAL_FOOD,
+    lenha: (S) => S.stock.madeira >= C.GOAL_WOOD,
+    inverno: (S) => S.stats.winters >= 1 && S.people.some((p) => p.alive),
+    olhar: (S) => !!S.stats.inspected,
+    vontade: (S) => !!S.stats.vontadeChanged,
+    frutas20: (S) => (S.stats.got && S.stats.got.frutas || 0) >= 20,
+    agua10: (S) => S.stock.agua >= 10,
+    peixe5: (S) => (S.stats.got && S.stats.got.peixe || 0) >= 5,
+    milagre: (S) => !!(S.god && S.god.miracles > 0),
+    historia: (S) => (S.stats.stories || 0) > 0,
+    oracao: (S) => !!(S.god && S.god.answered > 0),
+    festa: (S) => (S.stats.parties || 0) > 0,
+    ensino: (S) => (S.stats.taught || 0) > 0,
+  };
+  // metas que ainda contam para abrir a próxima fase (as missões opt não seguram)
+  const core = (S) => S.goals.filter((g) => !g.opt);
+  const leftover = (S) => S.goals.filter((g) => g.opt && !g.done);
   function checkGoals(S) {
-    const st = S.stock;
-    const test = {
-      fogo: () => S.stats.firstFire,
-      barraca: () => S.stats.firstTent,
-      comida: () => st.frutas + st.peixe >= C.GOAL_FOOD,
-      lenha: () => st.madeira >= C.GOAL_WOOD,
-      inverno: () => S.stats.winters >= 1 && S.people.some((p) => p.alive),
-    };
     for (const g of S.goals) {
-      const fn = test[g.id] || (G.Family.goalTest[g.id] && (() => G.Family.goalTest[g.id](S)));
-      if (!g.done && fn && fn()) { g.done = true; Sim.toast(S, 'Meta cumprida: ' + g.text.toLowerCase() + '.', 'good'); }
+      if (g.done) continue;
+      const fn = GOAL_TEST[g.id] || G.Family.goalTest[g.id] || G.Tech.goalTest[g.id] || (G.Obras && G.Obras.goalTest[g.id]) || (G.Inv && G.Inv.goalTest[g.id]);
+      if (!fn || !fn(S)) continue;
+      g.done = true;
+      if (g.reward && S.god && !g.paid) { g.paid = true; S.god.poder += g.reward; }
+      Sim.toast(S, 'Meta cumprida: ' + g.text.toLowerCase() + '.' + (g.reward ? ' +' + g.reward + ' de Poder.' : ''), 'good');
+      S.events.push({ k: 'goal', id: g.id });
     }
     if (!S.goalsPhase || S.goalsPhase === 1) {
-      if (!S.stats.allGoals && S.goals.every((g) => g.done)) {
+      if (!S.stats.allGoals && core(S).every((g) => g.done)) {
         S.stats.allGoals = true;
         Sim.chron(S, 'A base está pronta. O povo aprendeu a atravessar o inverno.');
       }
       if (S.stats.allGoals) {
-        S.goalsPhase = 2; S.goals = G.Family.goals2();
+        S.goalsPhase = 2; S.goals = G.Family.goals2().concat(missions(S, 2), leftover(S));
         Sim.toast(S, 'Novas metas: a família.', 'good');
         checkGoals(S);
       }
-    } else if (S.goalsPhase === 2 && !S.stats.famGoals && S.goals.every((g) => g.done)) {
-      S.stats.famGoals = true;
-      Sim.chron(S, 'A família cresceu. O povo já se sustenta com as próprias mãos.');
+    } else if (S.goalsPhase === 2) {
+      if (!S.stats.famGoals && core(S).every((g) => g.done)) {
+        S.stats.famGoals = true;
+        Sim.chron(S, 'A família cresceu. O povo já se sustenta com as próprias mãos.');
+      }
+      // Etapa 5: depois da família, as descobertas
+      if (S.stats.famGoals) {
+        S.goalsPhase = 3; S.goals = G.Tech.goals3().concat(missions(S, 3), leftover(S));
+        Sim.toast(S, 'Novas metas: as descobertas.', 'good');
+        checkGoals(S);
+      }
+    } else if (S.goalsPhase === 3) {
+      // Etapa 7: depois das descobertas (e do fim da Era da Família), a aldeia: casas, oficinas, caminhos
+      if (G.Obras && core(S).every((g) => g.done)) {
+        S.stats.techGoals = true;
+        S.goalsPhase = 4; S.goals = G.Obras.goals4().concat(missions(S, 4), leftover(S));
+        Sim.toast(S, 'Novas metas: a aldeia.', 'good');
+        checkGoals(S);
+      }
+    } else if (S.goalsPhase === 4) {
+      if (!S.stats.aldeiaGoals && core(S).every((g) => g.done)) {
+        S.stats.aldeiaGoals = true;
+        Sim.chron(S, 'A aldeia tomou forma: casas, oficinas e caminhos ligando tudo.');
+      }
     }
   }
+  // missões pequenas das obras que entram em cada fase (Etapa 7)
+  const missions = (S, phase) => (G.Obras ? G.Obras.missions(phase) : []).concat(G.Inv ? G.Inv.missions(phase) : [])
+    .filter((m) => !S.goals.some((g) => g.id === m.id));
+  Sim.checkGoals = checkGoals;
+  Sim.daily = (S) => daily(S);   // para os testes
 
   function updateBuildings(S, dt) {
     for (const b of S.buildings) {
       if (b.type === 'fogueira' && b.built && b.fuel > 0) {
-        b.fuel -= dt / 60 / C.FIRE_BURN_H * (S.precip === 'chuva' ? C.FIRE_RAIN : 1) * (G.Narr ? G.Narr.fireMult(S) : 1);
+        const f = Sim.def(b).fire;   // a fogueira de pedras segura a lenha e a chuva
+        b.fuel -= dt / 60 / f.burn * (S.precip === 'chuva' ? f.rain : 1) * (G.Narr ? G.Narr.fireMult(S) : 1);
         if (b.fuel <= 0) {
           b.fuel = 0;
           if (S.temp < 14 && S.people.some((p) => p.alive)) Sim.toast(S, 'A fogueira apagou.', 'warn');
@@ -610,6 +809,7 @@
     G.Family.onDeath(S, p);
     for (const q of S.people) if (q.alive && !q.mem.some((m) => m.k === 'perdeuCompanheiro' || m.k === 'perdeuFamilia')) Sim.addMem(S, q, 'perdeuAlguem');
     G.God.onDeath(S, p);
+    if (G.Life) G.Life.onDeath(S, p);
     if (!S.people.some((q) => q.alive)) {
       S.over = true;
       Sim.chron(S, 'O povo se foi. Restam os túmulos e esta crônica.');
@@ -651,9 +851,10 @@
     for (const p of out) p.fireShare = C.FIRE_CROWD;
     for (const b of S.buildings) {
       if (b.type !== 'fogueira' || !b.built || b.fuel <= 0) continue;
-      const near = out.filter((p) => Math.hypot(b.x + 0.5 - p.x, b.y + 0.5 - p.y) < C.FIRE_MAX_R && p.fireShare < 1)
+      const f = Sim.def(b).fire;
+      const near = out.filter((p) => Math.hypot(b.x + 0.5 - p.x, b.y + 0.5 - p.y) < f.r && p.fireShare < 1)
         .sort((a, c) => Math.hypot(b.x + 0.5 - a.x, b.y + 0.5 - a.y) - Math.hypot(b.x + 0.5 - c.x, b.y + 0.5 - c.y) || a.id - c.id);
-      for (let i = 0; i < Math.min(C.FIRE_SEATS, near.length); i++) near[i].fireShare = 1;
+      for (let i = 0; i < Math.min(f.seats, near.length); i++) near[i].fireShare = 1;
     }
   }
 
@@ -684,6 +885,8 @@
       else p.needs.saude = -999;
     }
     if (G.Narr) G.Narr.step(S, dt);   // lobos e viajantes
+    if (G.Fauna) G.Fauna.step(S, dt);   // capivaras
+    G.Tech.step(S, dt);   // moquém e jirau
     for (const p of S.people) if (p.alive && p.needs.saude <= 0) die(S, p);
   };
   Sim.advance = function (S, minutes) {
@@ -691,9 +894,14 @@
     for (let i = 0; i < steps && !S.over; i++) Sim.step(S, C.STEP_MIN);
   };
   Sim.init = function (S) {
+    if (G.Obras) G.Obras.init(S);   // antes de tudo: saves antigos (barraca avançada vira barraca nível 2)
     G.God.init(S);
     G.Family.init(S);
     if (G.Narr) G.Narr.init(S);
+    G.Tech.init(S);
+    if (G.Fauna) G.Fauna.init(S);
+    if (G.Life) G.Life.init(S);
+    fixGoals(S);
     if (!S.seen) {
       S.seen = new Uint8Array(S.world.W * S.world.H);
       reveal(S, S.camp.x + 1, S.camp.y + 1, S.t > C.START_HOUR * 60 + 60 ? C.SEE_OLD_SAVE : C.SEE_CAMP);

@@ -10,7 +10,7 @@
   let S = null, speed = 1, acc = 0, lastT = 0, lastSave = 0, lastCloud = 0, cloudBusy = false;
   let demo = null, demoDir = { x: 1, y: 0.35 };
   let siteWorld = null, siteSeed = 0, siteSel = null;
-  let placing = null, ghost = null, casting = null;
+  let placing = null, ghost = null, casting = null, roading = null;
   let camTarget = null, holdSim = false;
   const rng = new G.RNG((Date.now() ^ 0x5bd1e995) >>> 0);
 
@@ -21,7 +21,7 @@
     $('#scr-site').hidden = m !== 'site';
     $('#hud').hidden = !(m === 'game' || m === 'over');
     $('#scr-over').hidden = m !== 'over';
-    if (m !== 'game') { cancelPlacing(); cancelCasting(); }
+    if (m !== 'game') { cancelPlacing(); cancelCasting(); stopRoad(true); }
     R.overlay.ring = null;
     if (m !== 'game' && m !== 'over') { R.overlay.selPerson = 0; R.overlay.selBuilding = 0; }
   }
@@ -109,17 +109,18 @@
     S = st;
     enterGame();
     // o mundo seguiu com o jogo fechado
-    const minutes = S.over ? 0 : G.Offline.minutesFor(nowTrusted - (d.savedAt || nowTrusted));
+    const minutes = S.over ? 0 : G.Offline.minutesFor(nowTrusted - (d.savedAt || nowTrusted), S);
     if (minutes >= C.DAY_MIN / 24) {
       holdSim = true;
-      setTimeout(() => {
-        const r = G.Offline.run(S, minutes);
-        UI.consume(S, 0);
+      UI.awayProgress(0, minutes);
+      // em fatias: ausências longas não travam a tela
+      G.Offline.runAsync(S, minutes, (f) => UI.awayProgress(f, minutes), (r) => {
+        UI.consume(S, 0, true);
         R.invalidate();
         UI.bind(S);
         UI.away(r, () => { holdSim = false; checkPending(); });
         save();
-      }, 60);
+      });
     } else setTimeout(checkPending, 400);
   }
   // viajantes esperando resposta (a janela fecha com o jogo; aqui ela volta)
@@ -127,9 +128,19 @@
     if (!S || mode !== 'game') return;
     const g = G.Narr.pending(S);
     if (g) askChoice(g.id);
+    if (S.stats.eraEnd && !S.stats.eraSeen) showEra();   // a era fechou com o jogo fechado
   }
   // uma janela por vez: espera a outra fechar
-  const modalOpen = () => ['#modal-birth', '#modal-choice', '#modal-away'].some((id) => !$(id).hidden);
+  const modalOpen = () => ['#modal-birth', '#modal-choice', '#modal-away', '#modal-era'].some((id) => !$(id).hidden);
+  // fim da Era da Família: pausa e mostra o que o povo construiu
+  function showEra() {
+    if (!S || S.safe || mode !== 'game' || S.stats.eraSeen) return;
+    if (modalOpen()) { setTimeout(showEra, 800); return; }
+    S.stats.eraSeen = true;
+    const before = speed;
+    setSpeed(0);
+    UI.eraEnd(() => { setSpeed(before || 1); save(); });
+  }
   function askChoice(gid) {
     if (!S || S.safe || mode !== 'game') return;
     if (modalOpen()) { setTimeout(() => askChoice(gid), 600); return; }
@@ -219,11 +230,11 @@
   // ---------- construção ----------
   function startPlacing(type) {
     if (mode !== 'game') return;
-    cancelCasting();
+    cancelCasting(); stopRoad(true);
     if (placing === type) { cancelPlacing(); return; }
     placing = type;
     document.body.dataset.placing = type;
-    showHint('Toque no mapa para marcar a ' + C.BUILD[type].name.toLowerCase() + '.', cancelPlacing);
+    showHint('Toque no mapa para marcar ' + C.BUILD[type].a + ' ' + C.BUILD[type].name.toLowerCase() + '.', cancelPlacing);
     if (UI.isMobile()) UI.sheet('');
     const c = R.toWorld(window.innerWidth / 2, window.innerHeight / 2);
     updateGhost(c.x, c.y);
@@ -233,12 +244,20 @@
     hint.hidden = false;
     hint.innerHTML = `<span>${text}</span><button class="btn btn-small" id="place-cancel">Cancelar</button>`;
     $('#place-cancel').onclick = onCancel;
+    positionHint();
+  }
+  // a dica fica logo acima do painel de obras (que pode ter mais de uma fileira)
+  function positionHint() {
+    const hint = $('#place-hint'), panel = $('#p-construir');
+    if (!hint || UI.isMobile() || !panel) { if (hint) hint.style.bottom = ''; return; }
+    const r = panel.getBoundingClientRect();
+    hint.style.bottom = r.height > 0 ? Math.round(window.innerHeight - r.top + 10) + 'px' : '';
   }
   function hideHint() { const h = $('#place-hint'); if (h) h.hidden = true; }
   function cancelPlacing() {
     placing = null; ghost = null; R.overlay.ghost = null;
-    if (!casting) delete document.body.dataset.placing;
-    if (!casting) hideHint();
+    if (!casting && !roading) delete document.body.dataset.placing;
+    if (!casting && !roading) hideHint();
   }
   function footprint(type, wx, wy) {
     const d = C.BUILD[type];
@@ -258,7 +277,8 @@
     const b = Sim.placeBlueprint(S, placing, ghost.x, ghost.y);
     if (b) {
       const d = C.BUILD[b.type];
-      UI.toast(d.name + ' marcada. Precisa de ' + Object.entries(d.cost).map(([k, v]) => v + ' de ' + k).join(' e ') + '.', '');
+      const costs = Object.entries(d.cost).map(([k, v]) => v + ' de ' + k);
+      UI.toast(d.name + (d.a === 'o' ? ' marcado' : ' marcada') + '. Precisa de ' + (costs.length > 1 ? costs.slice(0, -1).join(', ') + ' e ' + costs[costs.length - 1] : costs[0]) + '.', '');
       if (!S.vontades.construir) UI.toast('Construir está proibido nas Vontades. Ninguém vai trabalhar na obra.', 'warn');
     }
     cancelPlacing();
@@ -269,8 +289,8 @@
     if (mode !== 'game' || !S) return;
     if (casting === kind) { cancelCasting(); return; }
     const why = God.canCast(S, kind);
-    if (why) { UI.toast(why + ' O Poder nasce da fé do povo.', 'warn'); return; }
-    cancelPlacing();
+    if (why) { UI.toast(why + (S.god.poder < God.MIRACLES[kind].cost ? ' O Poder nasce da fé do povo.' : ''), 'warn'); return; }
+    cancelPlacing(); stopRoad(true);
     casting = kind;
     document.body.dataset.placing = 'milagre';
     const m = God.MIRACLES[kind];
@@ -283,11 +303,107 @@
   function aimCast(wx, wy) {
     if (!casting) return;
     const tx = Math.floor(wx / TS), ty = Math.floor(wy / TS);
-    R.overlay.cast = { kind: casting, x: tx, y: ty, r: God.MIRACLES[casting].r, ok: Sim.isSeen(S, tx, ty) && (casting !== 'cura' || !!God.curaTarget(S, tx, ty)) };
+    R.overlay.cast = { kind: casting, x: tx, y: ty, r: God.MIRACLES[casting].r, ok: Sim.isSeen(S, tx, ty) &&
+      (casting !== 'cura' || !!God.curaTarget(S, tx, ty)) && (casting !== 'revelacao' || !!God.dreamTarget(S, tx, ty)) };
   }
   function cancelCasting() {
     casting = null; R.overlay.cast = null;
-    if (!placing) { delete document.body.dataset.placing; hideHint(); }
+    if (!placing && !roading) { delete document.body.dataset.placing; hideHint(); }
+  }
+
+  // ---------- caminhos (Etapa 7): arrastar pelo chão marca os passos; o povo abre com a Vontade de Construir ----------
+  function startRoad() {
+    if (mode !== 'game' || !S) return;
+    if (roading) { stopRoad(); return; }
+    cancelPlacing(); cancelCasting();
+    roading = { lv: 2, stroke: null };
+    document.body.dataset.placing = 'caminho';
+    roadHint();
+    if (UI.isMobile()) UI.sheet('');
+    UI.update(0, true);
+  }
+  function roadHint() {
+    const hint = $('#place-hint');
+    hint.hidden = false;
+    const lv = roading.lv;
+    hint.innerHTML = `<span>${UI.isMobile() ? 'Arraste com um dedo para marcar; com dois, mexe o mapa.' : 'Arraste pelo chão para marcar o caminho (o botão direito mexe o mapa).'}</span>
+      <span class="modes">
+        <button class="btn btn-small${lv === 2 ? ' on' : ''}" data-rlv="2" title="Terra batida: só trabalho. Anda-se 30% mais rápido.">Terra</button>
+        <button class="btn btn-small${lv === 3 ? ' on' : ''}" data-rlv="3" title="Pedra: 1 pedra por passo. Anda-se 45% mais rápido.">Pedra</button>
+        <button class="btn btn-small${lv === 0 ? ' on' : ''}" data-rlv="0" title="Desmancha o caminho marcado ou feito.">Desfazer</button>
+      </span>
+      <button class="btn btn-small" id="place-cancel">Pronto</button>`;
+    hint.querySelectorAll('[data-rlv]').forEach((b) => { b.onclick = () => { roading.lv = +b.dataset.rlv; roadHint(); }; });
+    $('#place-cancel').onclick = () => stopRoad();
+    positionHint();
+  }
+  function stopRoad(quiet) {
+    if (!roading) return;
+    roading = null; R.overlay.brush = null;
+    if (!placing && !casting) { delete document.body.dataset.placing; hideHint(); }
+    if (!quiet) UI.update(0, true);
+  }
+  function tileAt(wx, wy) {
+    const w = S.world, tx = Math.floor(wx / TS), ty = Math.floor(wy / TS);
+    return tx < 0 || ty < 0 || tx >= w.W || ty >= w.H ? -1 : ty * w.W + tx;
+  }
+  function paintRoad(i) {
+    const st = roading && roading.stroke;
+    if (!st || i < 0 || st.seen.has(i)) return;
+    st.seen.add(i);
+    if (roading.lv === 0) { if (G.Obras.markRoad(S, i, 0)) st.removed++; return; }
+    if (G.Obras.markRoad(S, i, roading.lv)) { st.marked++; return; }
+    const why = G.Obras.roadWhy(S, i);
+    if (why) st.why = why;
+    else st.had = true;   // já tinha caminho igual ou melhor
+  }
+  // do passo anterior até o atual, sem pular (arrasto rápido)
+  function paintLine(i0, i1) {
+    const W = S.world.W;
+    let x0 = i0 % W, y0 = (i0 / W) | 0;
+    const x1 = i1 % W, y1 = (i1 / W) | 0;
+    const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy;
+    for (let k = 0; k < 400; k++) {
+      paintRoad(y0 * W + x0);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x0 += sx; }
+      if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+  }
+  // o primeiro passo só é marcado quando o dedo anda (ou solta): se vier um segundo dedo, era para mexer o mapa
+  function roadDown(sx, sy) {
+    const w = R.toWorld(sx, sy), i = tileAt(w.x, w.y);
+    roading.stroke = { seen: new Set(), marked: 0, removed: 0, why: '', had: false, last: i, pending: true, sx, sy };
+  }
+  function roadMove(sx, sy) {
+    const w = R.toWorld(sx, sy), i = tileAt(w.x, w.y), st = roading.stroke;
+    brushAt(i);
+    if (!st) return;
+    if (st.pending) { if (Math.hypot(sx - st.sx, sy - st.sy) < 5) return; st.pending = false; paintRoad(st.last); }
+    if (i < 0 || i === st.last) return;
+    if (st.last >= 0) paintLine(st.last, i); else paintRoad(i);
+    st.last = i;
+  }
+  function roadUp(discard) {
+    const st = roading && roading.stroke;
+    if (!st) return;
+    if (discard && st.pending) { roading.stroke = null; return; }
+    if (st.pending) paintRoad(st.last);
+    roading.stroke = null;
+    if (st.marked) UI.toast(st.marked + (st.marked === 1 ? ' passo de caminho marcado' : ' passos de caminho marcados') + (roading.lv === 3 ? ', de pedra (1 pedra cada)' : '') + '. O povo abre com a Vontade de Construir.', '');
+    else if (st.removed) UI.toast(st.removed + (st.removed === 1 ? ' passo desfeito.' : ' passos desfeitos.'), '');
+    else if (st.why) UI.toast(st.why + '.', 'warn');
+    else if (st.had && roading.lv) UI.toast('Aí já tem caminho' + (roading.lv === 3 ? ' de pedra.' : '.'), '');
+    if (st.marked && !S.vontades.construir) UI.toast('Construir está proibido nas Vontades. Ninguém vai abrir o caminho.', 'warn');
+    UI.update(0, true);
+  }
+  // o passo debaixo do mouse
+  function brushAt(i) {
+    if (!roading) return;
+    const why = i >= 0 ? G.Obras.roadWhy(S, i) : 'fora';
+    R.overlay.brush = { tiles: [], lv: roading.lv, hover: i, hoverOk: roading.lv === 0 ? i >= 0 && !!(S.world.road[i] >= 2 || S.world.roadJob[i]) : !why };
   }
   function castAt(wx, wy) {
     const kind = casting;
@@ -302,12 +418,17 @@
   const ptrs = new Map();
   let drag = null, pinch = null;
   function onDown(e) {
+    if (!$('#menu').hidden) $('#menu').hidden = true;   // tocar no mapa fecha o menu
     cv().setPointerCapture(e.pointerId);
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (ptrs.size === 2) {
       const [a, b] = [...ptrs.values()];
-      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: R.cam.zoom };
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: R.cam.zoom, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, cx: R.cam.x, cy: R.cam.y };
       drag = null;
+      if (roading && roading.stroke) roadUp(true);
+    } else if (roading && mode === 'game' && e.button === 0) {
+      drag = null;
+      roadDown(e.clientX, e.clientY);
     } else {
       drag = { x: e.clientX, y: e.clientY, cx: R.cam.x, cy: R.cam.y, moved: false, button: e.button };
     }
@@ -321,9 +442,14 @@
       const z = pinch.zoom * d / pinch.d;
       if (mode === 'site') R.cam.zoom = Math.max(0.15, Math.min(4, z));
       else R.cam.zoom = Math.max(1, Math.min(6, z));
+      // os dois dedos também arrastam o mapa
+      const s = R.scale();
+      R.cam.x = pinch.cx - ((a.x + b.x) / 2 - pinch.mx) / s; R.cam.y = pinch.cy - ((a.y + b.y) / 2 - pinch.my) / s;
+      clampCam();
       camTarget = null;
       return;
     }
+    if (roading && mode === 'game' && !drag) { if (roading.stroke || e.pointerType === 'mouse') roadMove(e.clientX, e.clientY); return; }
     if (drag) {
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       if (!drag.moved && Math.hypot(dx, dy) > 6) { drag.moved = true; cv().classList.add('dragging'); }
@@ -342,6 +468,7 @@
   function onUp(e) {
     ptrs.delete(e.pointerId);
     if (pinch) { if (ptrs.size < 2) { pinch = null; if (mode !== 'site') R.cam.zoom = snapZoom(R.cam.zoom); } drag = null; return; }
+    if (roading && roading.stroke) { roadUp(); return; }
     cv().classList.remove('dragging');
     if (drag && !drag.moved) tap(e.clientX, e.clientY, drag.button);
     drag = null;
@@ -370,6 +497,7 @@
     if (mode === 'site') { pickSite(Math.floor(w.x / TS), Math.floor(w.y / TS)); return; }
     if (mode !== 'game' || !S) return;
     if (casting) { if (button === 2) cancelCasting(); else castAt(w.x, w.y); return; }
+    if (roading) return;
     if (placing) { if (button === 2) cancelPlacing(); else placeAt(w.x, w.y); return; }
     let best = null, bd = 1e9;
     for (const p of S.people) {
@@ -396,6 +524,21 @@
         return;
       }
     }
+    // capivara
+    if (S.fauna) {
+      let cap = null, cd = 1e9;
+      for (const e of S.fauna.ents) {
+        if (e.gone || !Sim.isSeen(S, Math.floor(e.x), Math.floor(e.y))) continue;
+        const d = Math.hypot(e.x * TS - w.x, e.y * TS - 3 - w.y);
+        if (d < Math.max(10, 16 / R.scale()) && d < cd) { cd = d; cap = e; }
+      }
+      if (cap) {
+        UI.toast(cap.state === 'morta' ? 'Uma capivara abatida. Quem caçou vai carnear e levar carne e couro ao estoque.' :
+          G.Tech.known(S, 'lanca') ? 'Capivara. Com Caça nas Vontades, quem tem lança traz 8 de carne e 2 de couro.' :
+            'Capivara pastando na beira d\'água. Quando o povo descobrir a lança, vira carne e couro.', '');
+        return;
+      }
+    }
     const tx = Math.floor(w.x / TS), ty = Math.floor(w.y / TS);
     const bid = S.world.bgrid[ty * S.world.W + tx];
     if (bid >= 0) {
@@ -409,22 +552,31 @@
 
   // ---------- teclado ----------
   let lastSpeed = 1;
-  function setSpeed(i) { if (i > 0) lastSpeed = i; speed = i; UI.update(0, true); }
+  function setSpeed(i) { i = Math.max(0, Math.min(C.SPEEDS.length - 1, i | 0)); if (i > 0) lastSpeed = i; speed = i; UI.update(0, true); }
   function onKey(e) {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (mode !== 'game') return;
     const k = e.key.toLowerCase();
     if (k === ' ') { e.preventDefault(); setSpeed(speed === 0 ? (lastSpeed || 1) : 0); }
-    else if (k === '1' || k === '2' || k === '3') setSpeed(+k);
+    else if (k >= '1' && k <= '5' && k.length === 1) setSpeed(+k);
     else if (k === 'f') startPlacing('fogueira');
     else if (k === 'b') startPlacing('barraca');
     else if (k === 'q') startCasting('calor');
     else if (k === 'r') startCasting('raio');
     else if (k === 'u') startCasting('chuva');
     else if (k === 'e') startCasting('cura');
+    else if (k === 'v') startCasting('revelacao');
+    else if (k === 'm' || k === 'j' || k === 'o' || k === 'g' || k === 'k' || k === 'l') {
+      const t = { m: 'moquem', j: 'jirau', o: 'forno', g: 'armazem', k: 'marcenaria', l: 'tecelagem' }[k];
+      if (G.Tech.buildOpen(S, t)) startPlacing(t);
+      else { const d = C.BUILD[t], why = d.need && !G.Tech.known(S, d.need) ? 'vem com ' + G.Tech.DISC[d.need].name.toLowerCase() : G.Obras.openWhy(S, t); UI.toast(d.name + ': ' + why + '.', ''); }
+    }
+    else if (k === 'p') startRoad();
+    else if (k === 'i') { if ($('#modal-disc').hidden) UI.disc(); else $('#modal-disc').hidden = true; }
     else if (k === 't') { if ($('#modal-tree').hidden) UI.tree(); else $('#modal-tree').hidden = true; }
+    else if (k === 'n' && G.Audio) { const on = G.Audio.toggle(); if (UI.syncSound) UI.syncSound(); UI.toast(on ? 'Som ligado.' : 'Som desligado.', ''); }
     else if (k === 'c') UI.sheet(document.body.dataset.sheet === 'cronica' ? '' : 'cronica');
-    else if (k === 'escape') { if (placing) cancelPlacing(); else if (casting) cancelCasting(); else { UI.select(0, 0); UI.sheet(''); $('#menu').hidden = true; } }
+    else if (k === 'escape') { if (!$('#menu').hidden) $('#menu').hidden = true; else if (placing) cancelPlacing(); else if (casting) cancelCasting(); else if (roading) stopRoad(); else { UI.select(0, 0); UI.sheet(''); } }
     else if (k === '+' || k === '=') { const i = ZOOMS.indexOf(snapZoom(R.cam.zoom)); R.cam.zoom = ZOOMS[Math.min(ZOOMS.length - 1, i + 1)]; }
     else if (k === '-') { const i = ZOOMS.indexOf(snapZoom(R.cam.zoom)); R.cam.zoom = ZOOMS[Math.max(0, i - 1)]; }
     else if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].indexOf(k) >= 0) {
@@ -441,6 +593,7 @@
   function loop(now) {
     const dt = lastT ? Math.min(0.25, (now - lastT) / 1000) : 0;
     lastT = now;
+    if (G.Audio) G.Audio.frame(S && (mode === 'game' || mode === 'over') && !holdSim ? S : null, mode, mode === 'game' ? speed : 1);
     if (mode === 'title') {
       R.cam.x += demoDir.x * 7 * dt; R.cam.y += demoDir.y * 7 * dt;
       if (demo && (R.cam.x < 30 * TS || R.cam.x > (demo.W - 30) * TS)) demoDir.x *= -1;
@@ -461,10 +614,12 @@
         if (Math.hypot(camTarget.x - R.cam.x, camTarget.y - R.cam.y) < 1) camTarget = null;
       }
       R.draw(S, Math.min(1, acc / C.STEP_MIN), now);
-      UI.consume(S, now);
-      UI.frame(now);
-      UI.update(now);
-      if (mode === 'game' && now - lastSave > 60000) save();
+      if (!holdSim) {   // com o mundo seguindo fora (tempo offline), os avisos esperam o resumo
+        UI.consume(S, now);
+        UI.frame(now);
+        UI.update(now);
+        if (mode === 'game' && now - lastSave > 60000) save();
+      }
     }
     requestAnimationFrame(loop);
   }
@@ -473,8 +628,11 @@
   function boot(data) {
     A.build();
     R.init($('#view'));
+    if (G.Audio) G.Audio.init();
     UI.init({
       place: startPlacing,
+      road: startRoad,
+      roading: () => !!roading,
       cast: startCasting,
       casting: () => casting,
       speed: setSpeed,
@@ -488,6 +646,7 @@
       choice: askChoice,
       // lobos à vista: o tempo volta para 1x (dá tempo de agir)
       alarm: () => { if (speed > 1) setSpeed(1); },
+      era: showEra,
       birth: (pid) => {
         if (!S || S.safe || mode !== 'game') return;
         const baby = S.people.find((q) => q.id === pid);
@@ -498,7 +657,7 @@
         UI.birth(baby, () => { setSpeed(before || 1); save(); });
       },
     });
-    window.addEventListener('resize', () => { R.resize(); if (mode === 'site' && siteWorld) R.cam.zoom = Math.max(0.2, R.fitZoom(siteWorld)); });
+    window.addEventListener('resize', () => { R.resize(); positionHint(); if (mode === 'site' && siteWorld) R.cam.zoom = Math.max(0.2, R.fitZoom(siteWorld)); });
     const c = $('#view');
     c.addEventListener('pointerdown', onDown);
     c.addEventListener('pointermove', onMove);
@@ -541,7 +700,7 @@
     G.debug = {
       get S() { return S; }, get mode() { return mode; },
       advance(days) { if (S) { Sim.advance(S, days * C.DAY_MIN); UI.update(0, true); } },
-      setSpeed, startPlacing, startCasting, placeAt: (tx, ty) => placeAt((tx + 0.5) * TS, (ty + 0.5) * TS),
+      setSpeed, startPlacing, startCasting, startRoad, stopRoad, placeAt: (tx, ty) => placeAt((tx + 0.5) * TS, (ty + 0.5) * TS),
       castAt: (kind, tx, ty) => { startCasting(kind); if (casting) castAt((tx + 0.5) * TS, (ty + 0.5) * TS); },
       select: (pid) => UI.select(pid, 0, true), cam: R.cam, save: () => save(true),
     };

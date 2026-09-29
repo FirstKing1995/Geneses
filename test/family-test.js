@@ -3,7 +3,7 @@
 // 2) simulação longa: 20 anos em 3 mundos, jogando bem e largado
 const path = require('path');
 globalThis.G = {};
-for (const f of ['core', 'config', 'world', 'sim', 'family', 'ai', 'god', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
+for (const f of ['core', 'config', 'world', 'sim', 'family', 'life', 'tech', 'invencoes', 'obras', 'fauna', 'ai', 'god', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
 const { W, Sim, CFG: C, Family: F, God, Save } = G;
 let ok = 0, bad = 0;
 const check = (name, cond, extra) => { if (cond) ok++; else bad++; console.log((cond ? 'ok   ' : 'FALHA') + ' · ' + name + (extra ? ' · ' + extra : '')); };
@@ -18,7 +18,7 @@ function world(seed) {
 // 1. casal fundador ligado
 let S = world(42);
 const [w, m] = S.people;
-check('casal fundador ligado', w.partner === m.id && m.partner === w.id, 'afeto ' + w.afeto);
+check('casal fundador ligado', F.isPartner(w, m) && F.isPartner(m, w), 'afeto ' + F.afeto(w, m));
 // 2. parentesco
 const a = F.makeBaby(S, w, m, 'F', 'A'); const b = F.makeBaby(S, w, m, 'M', 'B'); S.people.push(a, b);
 const out = F.makeBaby(S, null, null, 'M', 'Forasteiro'); S.people.push(out);
@@ -43,7 +43,7 @@ check('precisa de 6 lugares, tem 5', F.bedsNeeded(S) === 6 && F.bedsTotal(S) ===
 S = world(9001);
 const [w3, m3] = S.people;
 const t3 = S.buildings.find((x) => x.type === 'barraca');
-w3.afeto = m3.afeto = 90;
+F.link(S, w3, m3, 90);
 let conceived = 0, hearts = 0;
 for (let n = 0; n < 400 && !w3.preg; n++) {
   w3.sleeping = m3.sleeping = true; w3.inTent = m3.inTent = t3.id;
@@ -93,7 +93,7 @@ w5.preg = { t0: S.t, due: S.t + 1000, father: m5.id, known: true };
 S.goalsPhase = 2; S.goals = F.goals2();
 const S2 = Save.deserialize(JSON.parse(JSON.stringify(Save.serialize(S))));
 const k2b = S2.people.find((p) => p.name === 'Kid');
-check('save guarda família', k2b && k2b.mother === w5.id && k2b.carriedBy === w5.id && S2.people[0].preg && S2.goalsPhase === 2 && S2.people[0].partner === m5.id);
+check('save guarda família', k2b && k2b.mother === w5.id && k2b.carriedBy === w5.id && S2.people[0].preg && S2.goalsPhase === 2 && F.isPartner(S2.people[0], S2.people[1]) && F.afeto(S2.people[0], S2.people[1]) === F.afeto(w5, m5));
 // 9. frio: criança gelada e exausta, numa noite de inverno, vai dormir junto do fogo
 //    (antes ficava alternando entre se aquecer e dormir na barraca fria, e congelava)
 const winterNight = (S) => { S.t += 50 * 1440 + 20 * 60; Sim.refresh(S); };
@@ -145,7 +145,7 @@ function longRun(seed, mode) {
     if (mode === 'bem' && d % 3 === 0) {
       const need = F.bedsNeeded(S), have = F.bedsTotal(S), pend = S.buildings.some((b) => !b.built || b.up);
       if (!pend && have < need + 1 && S.stock.madeira >= 14) place('barraca');
-      else if (!pend && S.stock.pedra >= 8 && S.stock.madeira >= 12 && have < need + 1) { const b = S.buildings.find((x) => x.built && x.type === 'barraca'); if (b) Sim.startUpgrade(S, b); }
+      else if (!pend && S.stock.pedra >= 8 && S.stock.madeira >= 12 && have < need + 1) { const b = S.buildings.find((x) => x.built && x.type === 'barraca' && (x.lv || 1) === 1 && !x.up); if (b) Sim.startUpgrade(S, b); }
       Object.assign(S.vontades, S.ck.season >= 2 ? { madeira: 3, pesca: 3, frutas: 2 } : { madeira: 2, pesca: 3, frutas: 3 });
       S.vontades.pedra = S.stock.pedra < 10 ? 2 : 1;
     }

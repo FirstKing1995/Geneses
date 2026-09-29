@@ -1,5 +1,7 @@
-/* Gênesis · família (Etapa 3): idades, casais, gravidez, parto, bebês no colo e parentesco. Sem DOM.
-   A intimidade é abstraída: o casal dorme junto na barraca e aparece um coração. */
+/* Gênesis · família (Etapa 3): idades, laços, gravidez, parto, bebês no colo e parentesco. Sem DOM.
+   Etapa 6: relações livres. Cada adulto pode ter até BONDS_MAX pares, de qualquer sexo (p.bonds = { id: afeto });
+   filhos nascem de mulher com homem, que podem ser de pares diferentes. Nunca entre parentes próximos.
+   A intimidade é abstraída: o par dorme junto na barraca e aparece um coração. */
 (function (G) {
   'use strict';
   const C = G.CFG, U = G.U;
@@ -42,9 +44,10 @@
     const st = F.stage(S, p);
     let f = st === 'crianca' ? 0.9 : st === 'idoso' ? 0.85 : 1;
     if (F.latePregnant(S, p)) f *= 0.85;
+    if (p.hurt && p.hurt.until > S.t) f *= p.hurt.walk;   // pé torcido
     return f;
   };
-  F.carryCap = (S, p) => (F.stage(S, p) === 'crianca' ? C.CARRY_CHILD : C.CARRY);
+  F.carryCap = (S, p) => Math.round((F.stage(S, p) === 'crianca' ? C.CARRY_CHILD : C.CARRY) * (G.Tech ? G.Tech.carryMult(S) : 1));   // cestos: metade a mais
   // aprender: jovem aprende mais rápido, e mais ainda perto de um idoso
   F.xpFactor = function (S, p) {
     const st = F.stage(S, p);
@@ -76,15 +79,26 @@
   };
   // lugar na barraca: adulto e jovem 2, criança 1, bebê vai no colo
   F.bedUnits = function (S, p) { const st = F.stage(S, p); return st === 'bebe' ? 0 : st === 'crianca' ? 1 : 2; };
-  F.tentLoad = function (S, b) {
+  // só os moradores (sem as visitas desta noite): é a conta para dar lugar fixo
+  F.bedLoad = function (S, b) {
     let n = 0;
     for (const id of b.beds) { const q = person(S, id); if (q && q.alive) n += F.bedUnits(S, q); }
+    return n;
+  };
+  // moradores e quem veio dormir com um par esta noite (a visita divide a cama do par: 1 lugar)
+  F.tentLoad = function (S, b) {
+    let n = F.bedLoad(S, b);
+    if (b.guests) for (const id in b.guests) {
+      if (b.guests[id] <= S.t) { delete b.guests[id]; continue; }
+      const q = person(S, +id);
+      if (q && q.alive && b.beds.indexOf(q.id) < 0) n += 1;
+    }
     return n;
   };
   F.bedsNeeded = function (S) { let n = 0; for (const p of S.people) if (p.alive) n += F.bedUnits(S, p); return n; };
   F.bedsTotal = function (S) {
     let n = 0;
-    for (const b of S.buildings) if (b.built && C.BUILD[b.type].cap) n += C.BUILD[b.type].cap;
+    for (const b of S.buildings) if (b.built && G.Sim.def(b).cap) n += G.Sim.def(b).cap;
     return n;
   };
 
@@ -108,11 +122,20 @@
   };
   F.childrenOf = (S, p) => S.people.filter((q) => q.mother === p.id || q.father === p.id);
   F.siblingsOf = (S, p) => S.people.filter((q) => q !== p && ((p.mother && q.mother === p.mother) || (p.father && q.father === p.father)));
-  F.partnerOf = function (S, p) { const q = person(S, p.partner); return q && q.alive ? q : null; };
+  // ---------- laços ----------
+  F.isPartner = (p, q) => !!(p && q && p.bonds && p.bonds[q.id] !== undefined);
+  F.afeto = (p, q) => (F.isPartner(p, q) ? p.bonds[q.id] : 0);
+  // pares vivos, do maior afeto para o menor
+  F.partners = function (S, p) {
+    const out = [];
+    if (p.bonds) for (const id in p.bonds) { const q = person(S, +id); if (q && q.alive) out.push(q); }
+    return out.sort((a, b) => p.bonds[b.id] - p.bonds[a.id] || a.id - b.id);
+  };
+  F.partnerOf = (S, p) => F.partners(S, p)[0] || null;   // o par de mais afeto
   // como p chama q
   F.relation = function (S, p, q) {
     const fem = q.sex === 'F';
-    if (p.partner === q.id) return fem ? 'companheira' : 'companheiro';
+    if (F.isPartner(p, q)) return fem ? 'companheira' : 'companheiro';
     if (p.mother === q.id) return 'mãe';
     if (p.father === q.id) return 'pai';
     if (q.mother === p.id || q.father === p.id) return fem ? 'filha' : 'filho';
@@ -159,29 +182,67 @@
     return base;
   }
 
-  // ---------- casais ----------
+  // ---------- pares ----------
   F.link = function (S, a, b, afeto) {
-    a.partner = b.id; b.partner = a.id;
-    a.afeto = b.afeto = afeto;
+    (a.bonds || (a.bonds = {}))[b.id] = afeto;
+    (b.bonds || (b.bonds = {}))[a.id] = afeto;
   };
-  F.addAfeto = function (S, p, d) {
-    const q = F.partnerOf(S, p);
-    p.afeto = U.clamp((p.afeto || 0) + d, 0, 100);
-    if (q) q.afeto = U.clamp((q.afeto || 0) + d, 0, 100);
+  F.unlink = function (S, a, b) {
+    if (a.bonds) delete a.bonds[b.id];
+    if (b.bonds) delete b.bonds[a.id];
   };
-  F.onChat = function (S, p, q) {
-    if (p.partner === q.id) F.addAfeto(S, p, C.AFETO_CHAT);
+  F.addAfeto = function (S, a, b, d) {
+    if (!F.isPartner(a, b)) return;
+    const v = U.clamp((a.bonds[b.id] || 0) + d, 0, 100);
+    a.bonds[b.id] = v;
+    if (b.bonds) b.bonds[a.id] = v;
   };
-  function formCouples(S) {
-    const free = S.people.filter((p) => p.alive && !F.partnerOf(S, p) && F.age(S, p) >= 18 && F.age(S, p) <= 50);
+  F.onChat = function (S, p, q, extra) {
+    if (F.isPartner(p, q)) F.addAfeto(S, p, q, C.AFETO_CHAT + (extra || 0));
+  };
+  // brigados não se aproximam até fazer as pazes
+  F.feuding = (S, a, b) => !!((a.feud && a.feud[b.id] > S.t) || (b.feud && b.feud[a.id] > S.t));
+  // pares de cada tipo: do outro sexo (até BONDS_MAX) e do mesmo sexo (até BONDS_SAME_MAX, à parte)
+  const countKind = (S, p, same) => F.partners(S, p).filter((q) => (q.sex === p.sex) === same).length;
+  // quem ainda pode ter mais um par
+  F.canBond = (S, p) => p.alive && !p.carriedBy && F.age(S, p) >= 18 && F.age(S, p) <= C.BOND_AGE_MAX;
+  // novos pares: quem conversa muito, anda de bem com a vida e não é parente próximo.
+  // Ter par não impede outro; só pesa um pouco (BOND_MORE por par do mesmo tipo que já tem).
+  function formBonds(S) {
+    const free = S.people.filter((p) => F.canBond(S, p));
     for (let i = 0; i < free.length; i++) for (let j = i + 1; j < free.length; j++) {
       const a = free[i], b = free[j];
-      if (F.partnerOf(S, a) || F.partnerOf(S, b) || F.closeKin(S, a, b)) continue;
+      if (F.isPartner(a, b) || F.closeKin(S, a, b) || F.feuding(S, a, b)) continue;
+      const same = a.sex === b.sex, max = same ? C.BONDS_SAME_MAX : C.BONDS_MAX;
+      const na = countKind(S, a, same), nb = countKind(S, b, same);
+      if (na >= max || nb >= max) continue;
       const talks = Math.min(a.rel[b.id] || 0, b.rel[a.id] || 0);
       if (talks < C.COUPLE_TALKS || a.mood < 40 || b.mood < 40) continue;
-      if (!S.rng.chance(C.COUPLE_DAILY)) continue;
+      let ch = C.COUPLE_DAILY * Math.pow(C.BOND_MORE, Math.min(2, na + nb));
+      if (same) ch *= C.BOND_SAME_SEX;
+      else {
+        const w = a.sex === 'F' ? a : b;
+        if (F.age(S, w) <= C.FERTILE_MAX && !F.partners(S, w).some((m) => m.sex === 'M')) ch *= C.BOND_FERTILE;   // quer ter filho
+      }
+      if (!S.rng.chance(ch)) continue;
       F.link(S, a, b, 55);
+      S.stats.bonds = (S.stats.bonds || 0) + 1;
       Sim().chron(S, a.name + ' e ' + b.name + ' estão juntos.');
+      if (G.Life) G.Life.onBond(S, a, b);
+    }
+  }
+  // o afeto esfria sem conversa e sem noites juntos; chegou a zero, o par se desfaz em paz
+  function coolBonds(S) {
+    for (const p of S.people) {
+      if (!p.alive || !p.bonds) continue;
+      for (const q of F.partners(S, p)) {
+        if (p.id > q.id) continue;   // cada par uma vez
+        const d = C.AFETO_DECAY + (p.mood < 25 ? 0.5 : 0) + (q.mood < 25 ? 0.5 : 0);
+        F.addAfeto(S, p, q, -d);
+        if (F.afeto(p, q) > 0) continue;
+        F.unlink(S, p, q);
+        Sim().chron(S, p.name + ' e ' + q.name + ' se separaram, sem mágoa.');
+      }
     }
   }
 
@@ -191,23 +252,36 @@
     for (const q of S.people) if (q.alive && q.mother === w.id) best = Math.min(best, F.ageYears(S, q));
     return best;
   }
-  // uma vez por noite: casal junto na barraca, afeto alto e o corpo em dia
+  // uma vez por noite: pares que dormem na mesma barraca (moradores ou visita), afeto alto e o corpo em dia
   function nightTogether(S) {
+    const hearts = new Set();
     for (const w of S.people) {
-      if (!w.alive || w.sex !== 'F' || !w.sleeping || !w.inTent) continue;
-      const m = F.partnerOf(S, w);
-      if (!m || !m.sleeping || m.inTent !== w.inTent) continue;
-      F.addAfeto(S, w, C.AFETO_NIGHT);
-      if ((w.afeto || 0) < C.AFETO_MIN) continue;
-      const tb = Sim().building(S, w.inTent);
-      if (tb) S.events.push({ k: 'heart', x: tb.x + 1, y: tb.y });
-      if (m.sex !== 'M' || w.preg || w.labor) continue;
-      const aw = F.age(S, w), am = F.age(S, m);
-      if (aw < 18 || aw > C.FERTILE_MAX || am < 18 || F.closeKin(S, w, m)) continue;
+      if (!w.alive || !w.sleeping || !w.inTent || !w.bonds) continue;
+      const here = F.partners(S, w).filter((q) => q.sleeping && q.inTent === w.inTent);
+      if (!here.length) continue;
+      for (const q of here) {
+        if (w.id < q.id) F.addAfeto(S, w, q, C.AFETO_NIGHT);   // cada par uma vez
+        if (F.afeto(w, q) >= C.AFETO_MIN && !hearts.has(w.inTent)) {
+          hearts.add(w.inTent);
+          const tb = Sim().building(S, w.inTent);
+          if (tb) S.events.push({ k: 'heart', x: tb.x + 1, y: tb.y });
+        }
+      }
+      // gravidez: mulher com um par homem, adultos, sem parentesco próximo
+      if (w.sex !== 'F' || w.preg || w.labor) continue;
+      const aw = F.age(S, w);
+      if (aw < 18 || aw > C.FERTILE_MAX) continue;
+      const men = here.filter((m) => m.sex === 'M' && F.age(S, m) >= 18 && F.afeto(w, m) >= C.AFETO_MIN && !F.closeKin(S, w, m));
+      if (!men.length) continue;
       if (youngestChildAge(S, w) < C.BIRTH_SPACING_Y) continue;
       const n = w.needs;
       if (n.fome < 30 || n.saude < 50 || n.calor < 40) continue;
-      if (S.rng.next() < C.CONCEIVE_NIGHT * (w.afeto / 100)) {
+      // com mais de um par na barraca, o de mais afeto tem mais chance
+      let sum = 0;
+      for (const m of men) sum += F.afeto(w, m);
+      let r = S.rng.next() * sum, m = men[0];
+      for (const x of men) { r -= F.afeto(w, x); if (r <= 0) { m = x; break; } }
+      if (S.rng.next() < C.CONCEIVE_NIGHT * (F.afeto(w, m) / 100)) {
         w.preg = { t0: S.t, due: S.t + Math.round(C.PREGNANCY_Y * YEAR()), father: m.id, known: false };
       }
     }
@@ -234,7 +308,7 @@
   function startLabor(S, w) {
     const Sm = Sim();
     let risk = C.BIRTH_RISK;
-    if (S.buildings.some((b) => b.built && C.BUILD[b.type].cap)) risk += C.BIRTH_RISK_TENT;
+    if (S.buildings.some((b) => b.built && G.Sim.def(b).cap)) risk += C.BIRTH_RISK_TENT;
     if (S.ctx && S.ctx.fireLit) risk += C.BIRTH_RISK_FIRE;
     if (w.needs.saude < 50 || w.needs.fome < 25) risk += C.BIRTH_RISK_WEAK;
     const hard = !S.safe && S.rng.next() < Math.max(0.02, risk);
@@ -285,8 +359,9 @@
     S.events.push({ k: 'birth', pid: baby.id });
     Sm.addMem(S, w, 'nasceuFilho'); if (dad && dad.alive) Sm.addMem(S, dad, 'nasceuFilho');
     for (const q of S.people) if (q.alive && q !== w && q !== dad && q !== baby && F.closeKin(S, q, baby)) Sm.addMem(S, q, 'nasceuIrmao');
-    if (first) { S.era = 'familia'; Sm.chron(S, 'Começa a Era da Família.'); }
+    if (first && !S.stats.eraEnd) { S.era = 'familia'; Sm.chron(S, 'Começa a Era da Família.'); }
     G.God.onBirth(S, baby, w, dad);
+    if (G.Life) G.Life.onBirth(S, baby, w, dad);   // agradecem e fazem festa
     return baby;
   }
   // renomear depois (Deus dá o nome): troca também na Crônica
@@ -332,10 +407,9 @@
         c.needs.fome -= C.NURSE_COST; c.needs.sede -= C.NURSE_COST;
         continue;
       }
-      // sem mãe por perto: papinha de fruta e água do estoque
+      // sem mãe por perto: papinha do estoque (fruta, peixe, carne, e o conservado por último) e água
       const st = S.stock;
-      if (n.fome <= 70 && st.frutas > 0) { st.frutas--; n.fome = 100; }
-      else if (n.fome <= 70 && st.peixe > 0) { st.peixe--; n.fome = 100; }
+      if (n.fome <= 70) { const k = ['frutas', 'peixe', 'carne', 'seca', 'defumado'].find((f) => st[f] > 0); if (k) { st[k]--; n.fome = 100; } }
       if (n.sede <= 70 && st.agua > 0) { st.agua--; n.sede = 100; }
       else if (n.sede <= 70 && c.needs.sede > 30) n.sede = Math.min(100, n.sede + 40);
     }
@@ -374,11 +448,13 @@
   // ---------- metas da família ----------
   F.goals2 = function () {
     return [
-      { id: 'filho', text: 'Receba o primeiro filho', done: false },
-      { id: 'camas', text: 'Tenha barraca para todos', done: false },
-      { id: 'estoque', text: 'Guarde comida para ' + C.GOAL_FOOD_DAYS + ' dias', done: false },
-      { id: 'ajuda', text: 'Veja um filho crescer e ajudar', done: false },
-      { id: 'povo', text: 'Chegue a ' + C.GOAL_PEOPLE + ' pessoas', done: false },
+      { id: 'filho', text: 'Receba o primeiro filho', reward: 10, done: false },
+      { id: 'camas', text: 'Tenha barraca para todos', reward: 6, done: false },
+      { id: 'estoque', text: 'Guarde comida para ' + C.GOAL_FOOD_DAYS + ' dias', reward: 6, done: false },
+      { id: 'festa', text: 'Veja o povo fazer uma festa', opt: true, reward: 5, done: false },
+      { id: 'ajuda', text: 'Veja um filho crescer e ajudar', reward: 8, done: false },
+      { id: 'ensino', text: 'Veja alguém ensinar um jovem', opt: true, reward: 4, done: false },
+      { id: 'povo', text: 'Chegue a ' + C.GOAL_PEOPLE + ' pessoas', reward: 12, done: false },
     ];
   };
   F.goalTest = {
@@ -393,8 +469,9 @@
   F.init = function (S) {
     S.stats.births = S.stats.births || 0;
     for (const p of S.people) {
-      if (p.afeto === undefined) p.afeto = 0;
-      if (p.partner === undefined) p.partner = 0;
+      // saves até a 0.5: um só par (partner, afeto) vira o primeiro laço
+      if (p.bonds === undefined) { p.bonds = {}; if (p.partner) p.bonds[p.partner] = p.afeto || 0; }
+      delete p.partner; delete p.afeto;
       if (p.mother === undefined) p.mother = 0;
       if (p.father === undefined) p.father = 0;
       if (p.preg === undefined) p.preg = null;
@@ -405,8 +482,11 @@
     if (!S.famInit) {
       S.famInit = true;
       const [a, b] = S.people;
-      if (a && b && !a.partner && !b.partner && !a.mother && !b.mother) F.link(S, a, b, C.AFETO_START);
+      if (a && b && !F.partners(S, a).length && !F.partners(S, b).length && !a.mother && !b.mother) F.link(S, a, b, C.AFETO_START);
     }
+    // quem dormia de visita não está mais lá (save)
+    for (const b of S.buildings) if (b.guests) delete b.guests;
+    for (const p of S.people) { p.visiting = null; p.host = 0; }
     for (const b of S.people) if (b.alive && b.carriedBy) F.followCarrier(S, b);
   };
   F.hourly = function (S) {
@@ -422,13 +502,9 @@
       if (p.lastAge !== undefined && age > p.lastAge) birthday(S, p, age);
       p.lastAge = age;
       oldAge(S, p, age);
-      if (p.partner) {
-        const q = F.partnerOf(S, p);
-        if (!q) { p.partner = 0; continue; }
-        p.afeto = U.clamp((p.afeto || 0) - C.AFETO_DECAY - (p.mood < 25 ? 1 : 0), 0, 100);
-      }
     }
-    formCouples(S);
+    coolBonds(S);
+    formBonds(S);
   };
   F.onDeath = function (S, p) {
     const Sm = Sim();
@@ -436,8 +512,9 @@
     if (p.carriedBy) p.carriedBy = 0;
     // quem estava no colo passa para outro
     for (const b of S.people) if (b.alive && b.carriedBy === p.id) { if (!newCarrier(S, b)) b.needs.saude = -999; }
-    const q = F.partnerOf(S, p);
-    if (q) Sm.addMem(S, q, 'perdeuCompanheiro');
-    for (const k of F.family(S, p)) if (k.q.alive && (k.r === 'mãe' || k.r === 'pai' || k.r === 'filha' || k.r === 'filho')) Sm.addMem(S, k.q, 'perdeuFamilia');
+    for (const q of F.partners(S, p)) Sm.addMem(S, q, 'perdeuCompanheiro');
+    for (const k of F.family(S, p)) if (k.q.alive && (k.r === 'mãe' || k.r === 'pai' || k.r === 'filha' || k.r === 'filho' || k.r === 'irmã' || k.r === 'irmão')) Sm.addMem(S, k.q, 'perdeuFamilia');
+    // o par de quem morreu dorme onde der: a visita desta noite acaba
+    for (const b of S.buildings) if (b.guests) delete b.guests[p.id];
   };
 })(globalThis.G = globalThis.G || {});

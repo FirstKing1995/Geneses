@@ -137,7 +137,7 @@
       const ni = ny * W + nx;
       if (w.block[ni]) continue;
       if (k >= 4 && (w.block[cy * W + nx] || w.block[ny * W + cx])) continue;
-      onEdge(ni, NB[k][2] * C.COST[w.tile[ni]] * (w.slow[ni] ? C.BUILD_PASS_COST : 1), nx, ny);
+      onEdge(ni, NB[k][2] * C.COST[w.tile[ni]] * (w.slow[ni] ? C.BUILD_PASS_COST : 1) * (w.road ? C.ROAD_MULT[w.road[ni]] : 1), nx, ny);
     }
   }
 
@@ -148,7 +148,9 @@
     maxCost = maxCost || 400;
     ensure(w.W * w.H);
     const W = w.W, gx = goal % W, gy = (goal / W) | 0;
-    const h = (x, y) => { const dx = Math.abs(x - gx), dy = Math.abs(y - gy); return dx + dy + (Math.SQRT2 - 2) * Math.min(dx, dy); };
+    // com caminhos e trilhas o passo pode custar menos que 1: a estimativa encolhe para o A* ainda achar o caminho bom
+    const hk = w.roadCount ? 0.8 : 1;
+    const h = (x, y) => { const dx = Math.abs(x - gx), dy = Math.abs(y - gy); return (dx + dy + (Math.SQRT2 - 2) * Math.min(dx, dy)) * hk; };
     gBuf[start] = 0; seenBuf[start] = stamp;
     heap.push(h(start % W, (start / W) | 0), start);
     let cur, gc;
@@ -171,8 +173,8 @@
     return null;
   }
 
-  // Dijkstra até o primeiro tile que passa no teste
-  function findNearest(w, start, test, maxCost) {
+  // Dijkstra até o primeiro tile que passa no teste (allowSlow: também dentro de obras, quando não há outro jeito)
+  function findNearest(w, start, test, maxCost, allowSlow) {
     maxCost = maxCost || C.SEARCH_MAX;
     ensure(w.W * w.H);
     gBuf[start] = 0; seenBuf[start] = stamp;
@@ -191,7 +193,7 @@
       if (closedBuf[cur] === stamp) continue;
       closedBuf[cur] = stamp;
       gc = gBuf[cur];
-      const r = w.slow[cur] ? 0 : test(cur);
+      const r = w.slow[cur] && !allowSlow ? 0 : test(cur);
       if (r) return { idx: cur, path: rebuild(start, cur), data: r, cost: gc };
       expand(w, cur, edge);
     }

@@ -8,16 +8,25 @@
   const RUN = 0, DONE = 1, FAIL = -1;
   const DONE_QUIET = 2;   // terminou, mas sem o "bom dia" (acordou de madrugada para beber, por exemplo)
 
-  const WORK = ['frutas', 'agua', 'madeira', 'pedra', 'pesca', 'construir', 'fogo'];
+  const WORK = ['frutas', 'agua', 'madeira', 'pedra', 'pesca', 'caca', 'argila', 'construir', 'caminho', 'oficio', 'conservar', 'fogo'];
+  const VONT = { caminho: 'construir' };   // caminho usa a Vontade de Construir (Etapa 7)
   const WORK_SET = new Set(WORK);
-  const SKILL_OF = { frutas: 'coleta', agua: 'coleta', madeira: 'coleta', pedra: 'coleta', pesca: 'pesca', construir: 'construcao', fogo: null };
-  // reavaliadas a cada 20 min; alimentar o fogo não (é rápido, e largar no meio devolvia a lenha e recomeçava sem fim)
-  const REEVAL = new Set(WORK.filter((w) => w !== 'fogo').concat(['vagar', 'brincar', 'aquecer', 'depositar']));
-  const Fam = G.Family;
+  const SKILL_OF = { frutas: 'coleta', agua: 'coleta', madeira: 'coleta', pedra: 'coleta', pesca: 'pesca', caca: 'caca', argila: 'coleta',
+    construir: 'construcao', caminho: 'construcao', oficio: 'oficio', conservar: null, fogo: null };
+  // reavaliadas a cada 20 min; alimentar o fogo não (é rápido, e largar no meio devolvia a lenha e recomeçava sem fim);
+  // caçar e conservar também não (largar a caça no meio perdia a presa; a carga do moquém é curta)
+  // caça, ofício e conservar não se reavaliam no meio: quem lasca segura a pedra na mão (o estoque parece vazio)
+  // e largava a peça pela metade a cada reavaliação, sem nunca terminar
+  const REEVAL = new Set(WORK.filter((w) => w !== 'fogo' && w !== 'caca' && w !== 'conservar' && w !== 'oficio').concat(['vagar', 'brincar', 'aquecer', 'depositar', 'ouvir', 'festa']));
+  const Fam = G.Family, Tech = G.Tech;
   AI.WORK = WORK;
-  AI.LABEL = { frutas: 'Frutas', agua: 'Água', madeira: 'Madeira', pedra: 'Pedra', pesca: 'Pesca', construir: 'Construir', fogo: 'Fogo' };
-  AI.SKILL_LABEL = { coleta: 'Coleta', pesca: 'Pesca', construcao: 'Construção' };
-  const RES_LABEL = { madeira: 'madeira', pedra: 'pedra', agua: 'água', frutas: 'frutas', peixe: 'peixe' };
+  AI.LABEL = { frutas: 'Frutas', agua: 'Água', madeira: 'Madeira', pedra: 'Pedra', pesca: 'Pesca', caca: 'Caça', argila: 'Argila',
+    construir: 'Construir', caminho: 'Caminhos', oficio: 'Ofício', conservar: 'Conservar', fogo: 'Fogo' };
+  AI.SKILL_LABEL = { coleta: 'Coleta', pesca: 'Pesca', construcao: 'Construção', caca: 'Caça', oficio: 'Ofício' };
+  const RES_LABEL = { madeira: 'madeira', pedra: 'pedra', agua: 'água', frutas: 'frutas', peixe: 'peixe', carne: 'carne', couro: 'couro',
+    argila: 'argila', defumado: 'defumado', seca: 'fruta seca', ferramentas: 'ferramentas', roupas: 'roupas',
+    tabuas: 'tábuas', fibra: 'fibra', mantas: 'mantas', redes: 'redes' };
+  AI.RES_LABEL = RES_LABEL;
 
   const LINES = {
     chegada: ['Chegamos.', 'Que lugar bonito.', 'Vamos ficar aqui.'],
@@ -46,6 +55,24 @@
     brincar: ['Pega-pega!', 'Não me pega!', 'Achei uma pedra bonita!', 'Olha o que eu sei fazer!', 'Ha ha ha!'],
     parto: ['Tá vindo…', 'Respira…', 'Aguenta firme.'],
     lobos: ['Lobos!', 'Corre pro fogo!', 'Tem lobo aqui!'],
+    caca: ['Vou atrás das capivaras.', 'Hoje tem carne.', 'Silêncio… lá estão elas.'],
+    acertou: ['Peguei uma!', 'Na mosca!', 'Carne para todo mundo!'],
+    errou: ['Errei…', 'Quase!', 'Ela foi para a água.'],
+    escapou: ['Escaparam todas.', 'Hoje não deu.'],
+    oficio: ['Vou fazer ferramentas.', 'Deixa eu lascar essa pedra.', 'Vou costurar um couro.'],
+    marcenaria: ['Vou tirar umas tábuas.', 'Essa madeira é boa.', 'Tábua reta, casa firme.'],
+    tear: ['Vou tecer um pouco.', 'Um fio por cima, um por baixo…', 'Essa manta vai ficar quentinha.'],
+    caminho: ['Vou abrir o caminho.', 'Por aqui a gente vai mais rápido.', 'Tirando o mato…'],
+    conservar: ['Vou pôr o peixe no moquém.', 'Fruta no sol dura o inverno.', 'Guardar para o frio.'],
+    argila: ['Vou buscar barro.', 'Esse barro é bom.'],
+    festa: ['Ê!', 'Dança comigo!', 'Que noite!', 'Mais uma!', 'Ninguém vai dormir hoje!', 'Ô, ô, ô!'],
+    semOuvinte: ['Ninguém quer ouvir hoje…', 'Fica pra amanhã, então.'],
+    chamaHistoria: ['Quem quer ouvir uma história?', 'Vem cá, que eu vou contar uma coisa.', 'Senta aqui perto do fogo.'],
+    // Etapa 8: invenções
+    chamaMusica: ['Quem quer ouvir a flauta?', 'Vem, que hoje tem música.', 'Senta aqui, que eu vou tocar.'],
+    tambor: ['Tum, tum, tum!', 'Mais forte!', 'Dança, povo!', 'Ninguém fica parado!'],
+    rede: ['Vou jogar a rede.', 'Hoje a rede vem cheia.'],
+    arco: ['Daqui eu acerto.', 'Silêncio… mira…', 'Vou de arco hoje.'],
   };
   AI.LINES = LINES;
 
@@ -55,15 +82,17 @@
   function lvl(p, sk) { return Math.min(C.SKILL_MAX, Math.floor(Math.sqrt((p.skills[sk] || 0) / C.SKILL_XP_DIV))); }
   AI.lvl = lvl;
   let curS = null;   // estado do passo atual (para a fase da vida)
-  function workSpeed(p, sk) {
+  function workSpeed(p, sk, wk) {
     let s = 1 + C.SKILL_BONUS * (sk ? lvl(p, sk) : 0);
     if (curS) s *= Fam.workFactor(curS, p);
+    if (curS && wk) s *= Tech.speed(curS, p, wk);   // ferramenta de pedra
     if (has(p, 'Trabalhador')) s *= 1.15;
     if (has(p, 'Preguiçoso')) s *= 0.85;
     if (p.needs.energia < 15) s *= 0.8;
     return s;
   }
   function tileOf(S, p) { return Math.floor(p.y) * S.world.W + Math.floor(p.x); }
+  const ctxNight = (S) => !!(S.ctx && (S.ctx.night || S.ctx.evening));
   // quem carrega um bebê sente o frio dele também
   function feltCold(S, p) {
     let c = p.needs.calor;
@@ -72,9 +101,9 @@
   }
   function person(S, id) { for (const q of S.people) if (q.id === id) return q; return null; }
   AI.person = person;
-  function say(S, p, key, chance, force) {
+  function say(S, p, key, chance, force, kind) {
     if (chance !== undefined && S.rng.next() > chance) return;
-    Sim.say(S, p, S.rng.pick(LINES[key]), force);
+    Sim.say(S, p, S.rng.pick(LINES[key]), force, kind);
   }
   function setPath(p, path) { p.path = path && path.length ? path : null; p.pathI = 0; }
   function moving(p) { return !!(p.path && p.pathI < p.path.length); }
@@ -85,8 +114,10 @@
   }
   function faceIdx(S, p, i) { face(p, i % S.world.W, (i / S.world.W) | 0); }
 
-  function route(S, p, test, maxCost) {
-    const r = W.findNearest(S.world, tileOf(S, p), test, maxCost || 160);
+  // allowSlow: aceita parar dentro de outra obra (fogueira ou moquém cercados de barracas continuam alcançáveis)
+  function route(S, p, test, maxCost, allowSlow) {
+    let r = W.findNearest(S.world, tileOf(S, p), test, maxCost || 160);
+    if (!r && allowSlow) r = W.findNearest(S.world, tileOf(S, p), test, maxCost || 160, true);
     if (!r) return null;
     setPath(p, r.path);
     return r;
@@ -98,7 +129,7 @@
       const x = i % w.W, y = (i / w.W) | 0;
       if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) return 0;
       return x >= b.x - 1 && x <= b.x + b.w && y >= b.y - 1 && y <= b.y + b.h ? 1 : 0;
-    }, 180);
+    }, 180, true);
   }
   function litFires(S) { return S.buildings.filter((b) => b.type === 'fogueira' && b.built && b.fuel > 0); }
   function litNearCamp(S) {
@@ -106,18 +137,32 @@
   }
   function othersDoing(S, p, type) { return S.people.some((q) => q !== p && q.alive && q.act && q.act.type === type); }
   function fishTaken(S, p, i) { return S.people.some((q) => q !== p && q.alive && q.act && q.act.type === 'pesca' && q.act.spot === i); }
+  function claimed(S, p, i) { return S.people.some((q) => q !== p && q.alive && q.act && q.act.spot === i && (q.act.type === 'argila' || q.act.type === 'pesca')); }
 
   function deposit(S, p) {
     const c = p.carry; if (!c) return;
+    if (c.back) { giveBack(S, p); return; }   // material de uma tarefa que ficou pela metade
     // o primeiro filho que ajuda: o portão da Etapa 3
     if ((p.mother || p.father) && Fam.age(S, p) < 18 && c.k !== 'obra' && !S.stats.childHelped) {
       S.stats.childHelped = true;
       Sim.chron(S, p.name + ' ajudou pela primeira vez: trouxe ' + c.n + ' de ' + RES_LABEL[c.k] + ' para o estoque.');
     }
-    if (c.k === 'obra') { S.stock.madeira += c.madeira || 0; S.stock.pedra += c.pedra || 0; }
-    else if (c.k === 'agua') S.stock.agua = Math.min(C.WATER_CAP, S.stock.agua + c.n);
+    if (c.k === 'obra') { for (const m of C.MATERIALS) S.stock[m] += c[m] || 0; }
+    else if (c.k === 'caca') {
+      S.stock.carne += c.carne; S.stock.couro += c.couro;
+      Sim.float(S, S.camp.x + 1, S.camp.y + 0.6, '+' + c.carne + ' carne +' + c.couro + ' couro');
+    } else if (c.k === 'agua') S.stock.agua = Math.min(Tech.waterCap(S), S.stock.agua + c.n);
     else S.stock[c.k] += c.n;
-    if (c.k !== 'obra') Sim.float(S, S.camp.x + 1, S.camp.y + 0.6, '+' + c.n + ' ' + RES_LABEL[c.k]);
+    if (c.fibra) { S.stock.fibra += c.fibra; S.stats.fibraGot = (S.stats.fibraGot || 0) + c.fibra; }   // embira da casca (Etapa 7)
+    if (c.k === 'frutas' || c.k === 'peixe') { const got = S.stats.got || (S.stats.got = {}); got[c.k] = (got[c.k] || 0) + c.n; }   // missões do Ato 1
+    if (c.k !== 'obra' && c.k !== 'caca') Sim.float(S, S.camp.x + 1, S.camp.y + 0.6, '+' + c.n + ' ' + RES_LABEL[c.k] + (c.fibra ? ' +' + c.fibra + ' fibra' : ''));
+    p.carry = null;
+  }
+  // devolve ao estoque o que a pessoa carregava para uma tarefa largada no meio
+  function giveBack(S, p) {
+    const c = p.carry;
+    if (!c) return;
+    if (c.back) { for (const k in c.back) S.stock[k] += c.back[k]; }
     p.carry = null;
   }
 
@@ -143,10 +188,10 @@
       }
       const tx = (idx % w.W) + 0.5, ty = ((idx / w.W) | 0) + 0.5;
       const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
-      const cost = C.COST[w.tile[idx]] * (w.slow[idx] ? 2 : 1);
+      const cost = C.COST[w.tile[idx]] * (w.slow[idx] ? 2 : 1) * (w.road ? C.ROAD_MULT[w.road[idx]] : 1);   // caminho e trilha andam mais
       const can = budget / cost;
       if (d > 1e-6) { if (Math.abs(dx) > Math.abs(dy)) p.dir = dx > 0 ? 2 : 3; else p.dir = dy > 0 ? 0 : 1; }
-      if (d <= can) { p.x = tx; p.y = ty; budget -= d * cost; p.pathI++; p.walk += d; }
+      if (d <= can) { p.x = tx; p.y = ty; budget -= d * cost; p.pathI++; p.walk += d; if (G.Obras) G.Obras.step(S, idx); }
       else { p.x += dx / d * can; p.y += dy / d * can; p.walk += can; budget = 0; }
     }
     if (p.path && p.pathI >= p.path.length) p.path = null;
@@ -154,23 +199,30 @@
 
   // ---------- barracas ----------
   function pickTent(S, p) {
-    const tents = S.buildings.filter((b) => b.built && C.BUILD[b.type].cap);
+    const tents = S.buildings.filter((b) => b.built && Sim.def(b).cap);
     if (!tents.length) return null;
-    const cap = (b) => C.BUILD[b.type].cap;
+    const cap = (b) => Sim.def(b).cap;
     const mate = Fam.partnerOf(S, p);
     let mine = tents.find((b) => b.beds.indexOf(p.id) >= 0);
-    if (mine && Fam.tentLoad(S, mine) > cap(mine)) {
-      // passou do limite (alguém cresceu): sai primeiro quem não está com o par na barraca, o maior e mais velho
-      const paired = (id) => { const q = person(S, id); return !!(q && q.partner && mine.beds.indexOf(q.partner) >= 0); };
+    if (mine && Fam.bedLoad(S, mine) > cap(mine)) {
+      // passou do limite (alguém cresceu): sai primeiro quem não está com um par na barraca, o maior e mais velho
+      const paired = (id) => { const q = person(S, id); return !!(q && Fam.partners(S, q).some((m) => mine.beds.indexOf(m.id) >= 0)); };
       const out = mine.beds.filter((id) => !paired(id)).map((id) => person(S, id)).filter(Boolean)
         .sort((a, b) => Fam.bedUnits(S, b) - Fam.bedUnits(S, a) || a.born - b.born)[0] || p;
       mine.beds.splice(mine.beds.indexOf(out.id), 1);
       if (out === p) mine = null;
     }
+    const need = (g) => g.reduce((n, q) => n + Fam.bedUnits(S, q), 0);
+    const fits = (b, g) => Fam.bedLoad(S, b) + need(g) <= cap(b);
+    // mora sem nenhum par e o par de mais afeto tem lugar na barraca dele: vai morar junto
+    // (se não tem filho pequeno dormindo ali; senão, fica e visita)
+    if (mine && mate && Fam.age(S, p) >= 18 && !Fam.partners(S, p).some((q) => mine.beds.indexOf(q.id) >= 0)) {
+      const mt = tents.find((b) => b !== mine && b.beds.indexOf(mate.id) >= 0);
+      const kidsHere = mine.beds.some((id) => { const k = person(S, id); return k && k.alive && (k.mother === p.id || k.father === p.id) && Fam.age(S, k) < 12; });
+      if (mt && !kidsHere && fits(mt, [p])) { mine.beds.splice(mine.beds.indexOf(p.id), 1); mt.beds.push(p.id); mine = mt; }
+    }
     if (mine) return mine;
     const mateTent = mate ? tents.find((b) => b.beds.indexOf(mate.id) >= 0) : null;
-    const need = (g) => g.reduce((n, q) => n + Fam.bedUnits(S, q), 0);
-    const fits = (b, g) => Fam.tentLoad(S, b) + need(g) <= cap(b);
     const holds = (b, ids) => b.beds.some((id) => ids.indexOf(id) >= 0);
     const parents = [p.mother, p.father].filter(Boolean);
     const kids = S.people.filter((q) => q.mother === p.id || q.father === p.id).map((q) => q.id);
@@ -184,6 +236,46 @@
     for (const q of g) if (pick.beds.indexOf(q.id) < 0) pick.beds.push(q.id);
     return pick;
   }
+  const homeOf = (S, q) => S.buildings.find((b) => b.built && Sim.def(b).cap && b.beds.indexOf(q.id) >= 0) || null;
+  // noite de visita: quem tem par morando em outra barraca dorme lá em parte das noites
+  // (a vontade de ficar em casa pesa VISIT_HOME mais o afeto dos pares que moram junto). Daí vêm filhos de pais diferentes.
+  function visitTent(S, p, home) {
+    if (!home || !p.bonds || Fam.age(S, p) < 18 || p.labor || (p.host && p.host > S.t)) return null;
+    const night = S.t + 12 * 60;
+    let stay = C.VISIT_HOME;
+    const opts = [];
+    for (const q of Fam.partners(S, p)) {
+      if (Fam.age(S, q) < 18 || q.carriedBy) continue;
+      const af = Fam.afeto(p, q);
+      if (home.beds.indexOf(q.id) >= 0) { stay += af; continue; }
+      if (q.visiting && q.visiting.until > S.t) continue;   // foi dormir com outro par
+      const qt = homeOf(S, q);
+      if (!qt || qt === home) continue;
+      if (Fam.tentLoad(S, qt) + 1 > Sim.def(qt).cap + C.VISIT_SQUEEZE) continue;   // a visita divide a cama do par e aperta um pouco
+      opts.push({ q, qt, w: af });
+    }
+    if (!opts.length) return null;
+    let sum = stay;
+    for (const o of opts) sum += o.w;
+    let r = S.rng.next() * sum - stay;
+    if (r < 0) return null;
+    for (const o of opts) {
+      r -= o.w;
+      if (r > 0) continue;
+      (o.qt.guests || (o.qt.guests = {}))[p.id] = night;
+      p.visiting = { tent: o.qt.id, q: o.q.id, until: night };
+      o.q.host = night;   // quem recebe fica em casa esta noite
+      return o.qt;
+    }
+    return null;
+  }
+  function unguest(S, p) {
+    if (!p.visiting) return;
+    const b = Sim.building(S, p.visiting.tent);
+    if (b && b.guests) delete b.guests[p.id];
+    p.visiting = null;
+  }
+  AI.visitTent = visitTent;
   function enterTent(S, p, b) { p.inTent = b.id; p.x = b.x + 1; p.y = b.y + 1; p.px = p.x; p.py = p.y; }
   function exitTent(S, p) {
     const b = Sim.building(S, p.inTent);
@@ -272,7 +364,7 @@
     start(S, p, a) {
       const w = S.world, here = tileOf(S, p);
       const r = W.findNearest(w, here, (i) => W.adjObj(w, i, (o) => o.k === 'bush' && o.fruit > 0 && !o.res), 60);
-      const food = S.stock.frutas + S.stock.peixe;
+      const food = S.ctx.food;
       if (food > 0) {
         const cr = W.findNearest(w, here, (i) => (Sim.isCamp(S, i) ? 1 : 0), 180);
         // longe de casa, com fruta no pé logo ali (ou quase nada no estoque): come no arbusto
@@ -295,10 +387,20 @@
       if (a.t < a.next) return RUN;
       if (n.fome >= 88) return DONE;
       if (a.src === 'estoque') {
-        const st = S.stock;
-        if (st.peixe > 0 && litNearCamp(S)) { st.peixe--; n.fome += C.FISH_COOKED; Sim.addMem(S, p, 'comeuQuente'); a.next = a.t + 25; a.hot = true; }
+        // o fresco primeiro (estraga logo); o conservado fica para quando faltar (o inverno)
+        const st = S.stock, fresh = st.peixe + st.carne;
+        if (fresh > 0 && litNearCamp(S)) {
+          const k = st.carne > st.peixe ? 'carne' : 'peixe';
+          const cm = Tech.cookMult(S);   // vasos (Etapa 8): cozido rende mais
+          st[k]--; n.fome += (k === 'carne' ? C.CARNE_COOKED : C.FISH_COOKED) * cm; Sim.addMem(S, p, cm > 1 ? 'comeuCozido' : 'comeuQuente'); a.next = a.t + 25; a.hot = k;
+        }
         else if (st.frutas > 0) { st.frutas--; n.fome += C.FRUIT_FOOD; a.next = a.t + 6; }
-        else if (st.peixe > 0) { st.peixe--; n.fome += C.FISH_RAW; Sim.addMem(S, p, 'comeuCru'); a.next = a.t + 12; }
+        else if (st.defumado > 0) { st.defumado--; n.fome += C.DEFUMADO_FOOD; a.next = a.t + 15; a.kept = 'defumado'; }
+        else if (st.seca > 0) { st.seca--; n.fome += C.SECA_FOOD; a.next = a.t + 6; a.kept = 'seca'; }
+        else if (fresh > 0) {
+          const k = st.carne > st.peixe ? 'carne' : 'peixe';
+          st[k]--; n.fome += k === 'carne' ? C.CARNE_RAW : C.FISH_RAW; Sim.addMem(S, p, k === 'carne' ? 'carneCrua' : 'comeuCru'); a.next = a.t + 12;
+        }
         else {
           if (n.fome > 40) return DONE;
           // o estoque acabou enquanto chegava: tenta um arbusto com fruta por perto
@@ -322,16 +424,22 @@
       const w = S.world, fires = litFires(S), auras = S.god ? S.god.auras : [];
       // gelado, com fogo aceso: dorme junto do fogo esta noite (a barraca fria não esquenta ninguém)
       const frozen = feltCold(S, p) < C.SLEEP_BY_FIRE && (fires.length || auras.length);
-      const tent = frozen ? null : pickTent(S, p);
+      const home = frozen ? null : pickTent(S, p);
+      // de noite, às vezes dorme na barraca de um par (de dia, cochilo é em casa)
+      const guest = home && ctxNight(S) ? visitTent(S, p, home) : null;
+      if (guest && toBuilding(S, p, guest)) { a.tent = guest.id; a.visit = true; return true; }
+      if (guest) unguest(S, p);
+      const tent = home;
       if (tent && toBuilding(S, p, tent)) { a.tent = tent.id; return true; }
       let r = null;
       if (fires.length || auras.length) {
         // dorme perto do fogo ou dentro do Calor de Deus
-        r = W.findNearest(w, tileOf(S, p), (i) => {
+        const near = (i) => {
           const x = i % w.W + 0.5, y = ((i / w.W) | 0) + 0.5;
           if (fires.some((f) => Math.hypot(x - f.x - 0.5, y - f.y - 0.5) <= C.FIRE_FULL_R)) return 1;
           return auras.some((g) => Math.hypot(x - g.x - 0.5, y - g.y - 0.5) <= g.r * 0.55) ? 1 : 0;
-        }, 140);
+        };
+        r = W.findNearest(w, tileOf(S, p), near, 140) || W.findNearest(w, tileOf(S, p), near, 140, true);   // fogo cercado de obras: deita onde der
       }
       a.byFire = !!r;
       if (!r) r = W.findNearest(w, tileOf(S, p), (i) => (Sim.isCamp(S, i) ? 1 : 0), 180);
@@ -367,11 +475,12 @@
       return RUN;
     },
     end(S, p, a, r) {
+      unguest(S, p);
       if (!p.sleeping) return;
       p.sleeping = false;
       if (a.t >= 240) {
         const b = p.inTent ? Sim.building(S, p.inTent) : null;
-        Sim.addMem(S, p, b ? (b.type === 'barraca2' ? 'dormiuBem' : 'dormiuBarraca') : 'dormiuRelento');
+        Sim.addMem(S, p, b ? ((b.lv || 1) >= 2 ? 'dormiuBem' : 'dormiuBarraca') : 'dormiuRelento');
       }
       if (p.inTent) exitTent(S, p);
       if (r === DONE) say(S, p, 'acordar', 0.35);
@@ -387,7 +496,7 @@
           const x = i % w.W + 0.5, y = ((i / w.W) | 0) + 0.5;
           if (fires.some((f) => Math.hypot(x - f.x - 0.5, y - f.y - 0.5) <= C.FIRE_FULL_R)) return 1;
           return auras.some((g) => Math.hypot(x - g.x - 0.5, y - g.y - 0.5) <= g.r * 0.55) ? 1 : 0;
-        }, 140);
+        }, 140, true);
         if (r) { a.src = 'fogo'; return true; }
       }
       const tent = pickTent(S, p);
@@ -425,9 +534,11 @@
       }, 40);
       if (!r) return false;
       AI.abort(S, q);
-      const chat = { a: p.id, b: q.id, on: false, over: false, t: 0, dur: 40 + S.rng.int(0, 30) };
-      a.chat = chat; a.with = q.id;
-      q.act = { type: 'conversar', stage: 'wait', t: 0, chat, with: p.id, score: 50 };
+      // Etapa 6: a conversa tem tipo e falas (pergunta e resposta, consolo, briga, pazes, ensinar, namoro)
+      const d = G.Life ? G.Life.dialog(S, p, q, a.hint) : null;
+      const chat = { a: p.id, b: q.id, on: false, over: false, t: 0, dur: d ? d.dur : 40 + S.rng.int(0, 30), d, li: 0 };
+      a.chat = chat; a.with = q.id; a.kind = d ? d.kind : 'papo';
+      q.act = { type: 'conversar', stage: 'wait', t: 0, chat, with: p.id, score: 50, kind: a.kind };
       q.path = null;
       return true;
     },
@@ -443,11 +554,18 @@
           chat.on = true;
         }
         chat.t += dt;
-        if (chat.t >= chat.dur) { chat.over = true; return DONE; }
-        if (S.rng.next() < dt / 16) {
+        const d = chat.d;
+        if (d) {
+          // cada fala na sua hora: quem puxou pergunta, o outro responde (os balões ficam lado a lado)
+          while (chat.li < d.lines.length && chat.t >= d.at[Math.min(chat.li, d.at.length - 1)]) {
+            const ln = d.lines[chat.li++];
+            Sim.say(S, ln.by ? other : p, ln.text, true, d.style || '');
+          }
+        } else if (S.rng.next() < dt / 16) {
           const who = S.rng.next() < 0.5 ? p : other, kid = Fam.age(S, who) < 12;
-          say(S, who, kid ? 'crianca' : p.partner === other.id ? 'casal' : 'chat', 1);
+          say(S, who, kid ? 'crianca' : Fam.isPartner(p, other) ? 'casal' : 'chat', 1);
         }
+        if (chat.t >= chat.dur) { chat.over = true; return DONE; }
       } else {
         a.t += dt;
         if (!chat.on && a.t > 90) { chat.over = true; return FAIL; }
@@ -458,13 +576,155 @@
     end(S, p, a) {
       const chat = a.chat; if (!chat) return;
       chat.over = true;
-      p.chatCool = S.t + 240;
+      const fight = chat.d && chat.d.kind === 'briga';
+      p.chatCool = S.t + (fight ? 480 : 240);
       if (chat.t >= 20) {
-        Sim.addMem(S, p, 'conversou'); p.rel[a.with] = (p.rel[a.with] || 0) + 1;
-        if (chat.a === p.id) { const q = person(S, a.with); if (q) Fam.onChat(S, p, q); }
+        if (!fight) { Sim.addMem(S, p, 'conversou'); p.rel[a.with] = (p.rel[a.with] || 0) + 1; }
+        if (chat.a === p.id) {
+          const q = person(S, a.with);
+          if (q) { if (!fight) Fam.onChat(S, p, q); if (G.Life) G.Life.afterChat(S, p, q, chat.d); }
+        }
       }
     },
   };
+
+  // ---------- Etapa 6: histórias, festas ----------
+  // um lugar perto do fogo (a roda), longe o bastante para não pisar nele
+  function toFireRing(S, p, f, r0, r1) {
+    const w = S.world, fx = f.x + 0.5, fy = f.y + 0.5;
+    // cada um no seu lugar da roda: não para onde já tem gente (ou onde alguém está indo)
+    const taken = new Set();
+    for (const q of S.people) {
+      if (q === p || !q.alive || q.carriedBy) continue;
+      taken.add(tileOf(S, q));
+      if (q.path && q.path.length) taken.add(q.path[q.path.length - 1]);
+    }
+    const ring = (i) => {
+      const x = i % w.W + 0.5, y = ((i / w.W) | 0) + 0.5, d = Math.hypot(x - fx, y - fy);
+      return d >= r0 && d <= r1 && w.bgrid[i] < 0 ? 1 : 0;
+    };
+    return route(S, p, (i) => (ring(i) && !taken.has(i) ? 1 : 0), 90) || route(S, p, ring, 90);
+  }
+  // quem conta: vai para a roda do fogo, conta em três partes e quem está por perto vem ouvir
+  ACT.historia = {
+    start(S, p, a) {
+      const Li = G.Life;
+      if (!Li || !Li.canTell(S, p)) return false;
+      const f = Li.campFire(S, true);
+      if (!f || !toFireRing(S, p, f, 0.9, 2.2)) return false;
+      if (!p.path) setPath(p, [tileOf(S, p)]);
+      Li.startStory(S, p, f);
+      a.fire = f.id;
+      return true;
+    },
+    run(S, p, a, dt) {
+      const st = S.life && S.life.story;
+      if (!st || st.teller !== p.id) return FAIL;
+      if (a.stage === 'go') {
+        a.walk = (a.walk || 0) + dt;
+        if (a.walk > 60 || S.ck.hour >= 20.5) { G.Life.endStory(S, p, false); return FAIL; }   // longe demais: fica para outro dia
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        a.stage = 'tell'; a.t = 0; st.on = true;
+        const f = Sim.building(S, st.fire); if (f) { face(p, f.x, f.y); G.Life.lightFire(S, f, 1); }   // fogo apagado: acende para contar
+        say(S, p, st.music ? 'chamaMusica' : 'chamaHistoria', 1, true, 'historia');
+        S.events.push({ k: 'story', on: true, x: p.x, y: p.y });
+        for (const q of S.people) if (q !== p && q.alive) q.nextEval = Math.min(q.nextEval, S.t);   // quem está por perto pensa se vem ouvir
+      }
+      a.t += dt;
+      // a história só anda com alguém ouvindo; quem ainda vem chegando, a gente espera
+      const state = (id) => { const q = person(S, id); return q && q.alive && q.act && q.act.type === 'ouvir' ? q.act.stage : ''; };
+      const listening = st.listeners.some((id) => state(id) === 'listen'), coming = st.listeners.some((id) => state(id) === 'go');
+      if (listening) { st.told = (st.told || 0) + dt; G.Life.storyTick(S, p, st, st.told); }
+      else if ((!coming && a.t >= 25) || a.t >= 70) {
+        // se alguém já ouviu um bom pedaço, termina ali; se ninguém veio, fica para outro dia
+        const some = Object.keys(st.heard).some((id) => st.heard[id] >= 15);
+        if (!some) say(S, p, 'semOuvinte', 1, true);
+        G.Life.endStory(S, p, some);
+        return DONE;
+      }
+      if ((st.told || 0) >= st.dur) { G.Life.endStory(S, p, true); return DONE; }
+      return RUN;
+    },
+    end(S, p, a) { const st = S.life && S.life.story; if (st && st.teller === p.id) G.Life.endStory(S, p, a.stage === 'tell' && Object.keys(st.heard).some((id) => st.heard[id] >= 15)); },
+  };
+  ACT.ouvir = {
+    start(S, p, a) {
+      const st = S.life && S.life.story;
+      if (!st || !G.Life.canListen(S, p, st)) return false;
+      const f = Sim.building(S, st.fire);
+      if (!f || !toFireRing(S, p, f, 1.2, 3.2)) return false;
+      if (!p.path) setPath(p, [tileOf(S, p)]);
+      a.st = st.id; a.teller = st.teller;
+      if (st.listeners.indexOf(p.id) < 0) st.listeners.push(p.id);
+      return true;
+    },
+    run(S, p, a, dt) {
+      const st = S.life && S.life.story;
+      if (!st || st.id !== a.st) return (a.heard || 0) >= 15 ? DONE : FAIL;
+      if (a.stage === 'go') {
+        a.walk = (a.walk || 0) + dt;
+        if (a.walk > 60) return FAIL;
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        a.stage = 'listen';
+      }
+      const t = person(S, st.teller);
+      if (t) face(p, Math.floor(t.x), Math.floor(t.y));
+      a.t += dt;
+      if (st.on && a.stage === 'listen') { a.heard = (a.heard || 0) + dt; st.heard[p.id] = a.heard; }
+      return RUN;
+    },
+    end(S, p, a) {
+      const st = S.life && S.life.story;
+      if (st && st.id === a.st && (a.heard || 0) < 15) { const i = st.listeners.indexOf(p.id); if (i >= 0) st.listeners.splice(i, 1); }
+    },
+  };
+  // festa: em volta do fogo, pulando de um lugar para outro da roda
+  ACT.festa = {
+    start(S, p, a) {
+      const pt = S.life && S.life.party;
+      if (!pt || !pt.on) return false;
+      const f = Sim.building(S, pt.fire);
+      if (!f || !f.built || !toFireRing(S, p, f, 1.2, 3.4)) return false;
+      if (!p.path) setPath(p, [tileOf(S, p)]);
+      a.fire = f.id;
+      G.Life.joinParty(S, p);
+      return true;
+    },
+    run(S, p, a, dt) {
+      const pt = S.life && S.life.party;
+      if (!pt || !pt.on) return DONE;
+      if (a.stage === 'go') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        a.stage = 'dance'; a.t = 0;
+      }
+      a.t += dt;
+      // quem bate o tambor (Etapa 8) fica no lugar; os outros pulam pela roda
+      const drummer = pt.drummer === p.id;
+      if (!drummer && !moving(p) && S.rng.next() < dt / 9) { const f = Sim.building(S, a.fire); if (f) danceHop(S, p, f); }
+      if (drummer && !moving(p)) { const f = Sim.building(S, a.fire); if (f) face(p, f.x, f.y); }
+      if (S.rng.next() < dt / 30) say(S, p, drummer ? 'tambor' : 'festa', 1, false, 'festa');
+      return RUN;
+    },
+    end(S, p) { if (G.Life && G.Life.leaveParty) G.Life.leaveParty(S, p); },
+  };
+  // um pulo para outro lugar da roda
+  function danceHop(S, p, f) {
+    const w = S.world, here = tileOf(S, p);
+    const busy = (i) => S.people.some((q) => q !== p && q.alive && !q.carriedBy && (tileOf(S, q) === i || (q.path && q.path[q.path.length - 1] === i)));
+    for (let k = 0; k < 6; k++) {
+      const ang = S.rng.next() * Math.PI * 2, r = 1.5 + S.rng.next() * 1.8;
+      const x = Math.floor(f.x + 0.5 + Math.cos(ang) * r), y = Math.floor(f.y + 0.5 + Math.sin(ang) * r);
+      if (x < 1 || y < 1 || x >= w.W - 1 || y >= w.H - 1) continue;
+      const i = y * w.W + x;
+      if (i === here || w.block[i] || w.slow[i] || w.bgrid[i] >= 0 || G.IS_WATER[w.tile[i]] || busy(i)) continue;
+      const path = W.findPath(w, here, i, 30);
+      if (path && path.length) { setPath(p, path); return true; }
+    }
+    return false;
+  }
 
   ACT.vagar = {
     start(S, p, a) {
@@ -517,12 +777,12 @@
     start(S, p, a) {
       const fires = litFires(S), w = S.world;
       const tent = pickTent(S, p);
-      const tentWarm = tent && S.temp + C.BUILD[tent.type].heat >= C.COMFORT;
+      const tentWarm = tent && S.temp + (Sim.def(tent).heat || 0) >= C.COMFORT;
       if (tent && (tentWarm || !fires.length) && toBuilding(S, p, tent)) { a.tent = tent.id; return true; }
       if (fires.length) route(S, p, (i) => {
         const x = i % w.W + 0.5, y = ((i / w.W) | 0) + 0.5;
         return fires.some((f) => Math.hypot(x - f.x - 0.5, y - f.y - 0.5) <= C.FIRE_FULL_R) ? 1 : 0;
-      }, 140);
+      }, 140, true);
       return true;
     },
     run(S, p, a, dt) {
@@ -549,7 +809,7 @@
     start(S, p, a) {
       const w = S.world, Nr = G.Narr;
       if (Nr.safeSpot(S, p)) { a.src = p.inTent ? 'barraca' : 'fogo'; a.stage = 'hide'; return true; }
-      const r = route(S, p, (i) => (Nr.safeTile(S, i) ? 1 : 0), 120);
+      const r = route(S, p, (i) => (Nr.safeTile(S, i) ? 1 : 0), 120, true);
       if (r) { if (!p.path) setPath(p, [r.idx]); a.src = 'fogo'; }   // já está no tile: vai até o meio dele
       else {
         const tent = pickTent(S, p);
@@ -613,10 +873,12 @@
         else if (kind === 'pedra') test = (i) => W.adjObj(w, i, (o) => o.k === 'rock' && o.ch > 0 && !o.res);
         else if (kind === 'frutas') test = (i) => W.adjObj(w, i, (o) => o.k === 'bush' && o.fruit > 0 && !o.res);
         else if (kind === 'agua') test = (i) => (W.waterAdj(w, i) >= 0 ? 1 : 0);
+        else if (kind === 'argila') test = (i) => (W.waterAdj(w, i) >= 0 && !claimed(S, p, i) ? 1 : 0);   // barreiro: a beira d'água
         else test = (i) => (W.waterAdj(w, i) >= 0 && W.waterCount8(w, i) >= 2 && !fishTaken(S, p, i) ? 1 : 0);
         // procura o alvo mais perto do acampamento (trabalho perto de casa), depois caminha até ele
         const campI = S.camp.y * w.W + S.camp.x;
-        const r = W.findNearest(w, campI, test, C.SEARCH_MAX);
+        // perto de casa primeiro; acabou pedra (ou árvore) por perto, vai mais longe (pedra não nasce de novo)
+        const r = W.findNearest(w, campI, test, C.SEARCH_MAX) || (kind === 'pedra' || kind === 'madeira' ? W.findNearest(w, campI, test, C.SEARCH_FAR) : null);
         if (!r) return false;
         const path = W.findPath(w, tileOf(S, p), r.idx, 300);
         if (!path) return false;
@@ -634,17 +896,17 @@
           a.stage = 'work'; a.t = 0; a.roll = 0; a.next = kind === 'frutas' ? C.HARVEST_MIN : 0;
           if (a.obj) face(p, a.obj.x, a.obj.y);
           else { const wi = W.waterAdj(w, tileOf(S, p)); if (wi >= 0) { faceIdx(S, p, wi); a.water = wi; } }
-          if (!a.spoke) { a.spoke = true; say(S, p, kind, 0.3); }
+          if (!a.spoke) { a.spoke = true; say(S, p, kind === 'pesca' && Tech.known(S, 'rede') && S.rng.next() < 0.5 ? 'rede' : kind, 0.3); }
         }
         if (a.stage === 'work') {
-          a.t += dt * workSpeed(p, sk);
+          a.t += dt * workSpeed(p, sk, kind);
           p.skills[sk] += dt / 60 * Fam.xpFactor(S, p);
           if (kind === 'madeira') {
             if (!objOk(a.obj, kind)) return FAIL;
             if (a.t < C.CHOP_MIN) return RUN;
             a.obj.k = 'stump'; a.obj.regrow = 0; a.obj.res = 0;
             W.refreshBlock(w, a.obj.y * w.W + a.obj.x);
-            p.carry = { k: 'madeira', n: C.TREE_WOOD };
+            p.carry = { k: 'madeira', n: C.TREE_WOOD, fibra: G.Obras ? G.Obras.embira(S) : 0 };
             S.events.push({ k: 'fell', x: a.obj.x, y: a.obj.y });
           } else if (kind === 'pedra') {
             if (!objOk(a.obj, kind)) return FAIL;
@@ -671,16 +933,20 @@
             if (!p.carry) return FAIL;
           } else if (kind === 'agua') {
             if (a.t < C.WATER_MIN) return RUN;
-            const room = C.WATER_CAP - S.stock.agua;
+            const room = Tech.waterCap(S) - S.stock.agua;
             if (room <= 0) return DONE;
-            // na seca o rio baixa: cada viagem rende menos
-            p.carry = { k: 'agua', n: Math.max(1, Math.min(Math.round((Fam.stage(S, p) === 'crianca' ? 3 : C.WATER_TRIP) * G.Narr.waterMult(S)), room)) };
+            // na seca o rio baixa: cada viagem rende menos; com cestos, cabem mais cabaças
+            p.carry = { k: 'agua', n: Math.max(1, Math.min(Math.round((Fam.stage(S, p) === 'crianca' ? 3 : C.WATER_TRIP) * Tech.carryMult(S) * G.Narr.waterMult(S)), room)) };
+          } else if (kind === 'argila') {
+            if (a.t < C.ARGILA_MIN) return RUN;
+            p.carry = { k: 'argila', n: Math.round(C.ARGILA_TRIP * Tech.carryMult(S)) };
           } else {
             if (a.t - a.roll >= C.FISH_ROLL) {
               a.roll += C.FISH_ROLL;
               let ch = C.FISH_CHANCE + C.FISH_CHANCE_LVL * lvl(p, 'pesca');
               if (S.ck.season === 3) ch *= C.FISH_WINTER;
               ch *= G.Narr.fishMult(S);   // seca e nevasca espantam, piracema enche o rio
+              ch *= Tech.fishMult(S, p);   // anzol
               if (S.rng.next() < ch) {
                 a.caught++;
                 p.carry = { k: 'peixe', n: a.caught };
@@ -688,7 +954,7 @@
                 if (a.water >= 0) S.events.push({ k: 'splash', x: a.water % w.W, y: (a.water / w.W) | 0 });
               }
             }
-            if (a.caught < C.FISH_MAX && a.t < C.FISH_SESSION) return RUN;
+            if (a.caught < (G.Inv ? G.Inv.fishMax(S) : C.FISH_MAX) && a.t < C.FISH_SESSION) return RUN;   // com a rede, mais por vez
             if (!a.caught) { say(S, p, 'semPeixe', 0.6); return DONE; }
           }
           return toHaul(S, p, a);
@@ -713,18 +979,21 @@
   ACT.frutas = gather('frutas');
   ACT.agua = gather('agua');
   ACT.pesca = gather('pesca');
+  ACT.argila = gather('argila');
 
+  const MATS = C.MATERIALS;
+  const sumMat = (o) => MATS.reduce((s, k) => s + (o[k] || 0), 0);
   ACT.construir = {
     start(S, p, a) {
       if (p.carry) return false;
       const job = S.ctx.job; if (!job) return false;
       const b = job.b, miss = Sim.missing(job);
       a.b = b.id;
-      if (miss.madeira + miss.pedra > 0) {
+      if (sumMat(miss) > 0) {
         let cap = Fam.carryCap(S, p);
-        const take = { madeira: 0, pedra: 0 };
-        for (const k of ['madeira', 'pedra']) { const t = Math.min(miss[k], S.stock[k], cap); take[k] = t; cap -= t; }
-        if (take.madeira + take.pedra === 0) return false;
+        const take = {};
+        for (const k of MATS) { const t = Math.max(0, Math.min(miss[k] || 0, S.stock[k] || 0, cap)); take[k] = t; cap -= t; }
+        if (sumMat(take) === 0) return false;
         if (!toCamp(S, p)) return false;
         a.take = take; a.stage = 'fetch';
         return true;
@@ -740,10 +1009,10 @@
       if (a.stage === 'fetch') {
         if (moving(p)) return RUN;
         if (p.stuck) return FAIL;
-        const m = Math.min(a.take.madeira, S.stock.madeira), s = Math.min(a.take.pedra, S.stock.pedra);
-        if (m + s === 0) return FAIL;
-        S.stock.madeira -= m; S.stock.pedra -= s;
-        p.carry = { k: 'obra', madeira: m, pedra: s, n: m + s };
+        const got = { k: 'obra', n: 0 };
+        for (const k of MATS) { const t = Math.min(a.take[k] || 0, S.stock[k] || 0); S.stock[k] -= t; got[k] = t; got.n += t; }
+        if (!got.n) return FAIL;
+        p.carry = got;
         if (!toBuilding(S, p, b)) return FAIL;
         a.stage = 'deliver';
         return RUN;
@@ -751,7 +1020,7 @@
       if (a.stage === 'deliver') {
         if (moving(p)) return RUN;
         if (p.stuck) return FAIL;
-        job.have.madeira += p.carry.madeira; job.have.pedra += p.carry.pedra;
+        for (const k of MATS) job.have[k] = (job.have[k] || 0) + (p.carry[k] || 0);
         p.carry = null;
         Sim.refresh(S);
         return DONE;
@@ -759,20 +1028,19 @@
       if (a.stage === 'go') {
         if (moving(p)) return RUN;
         if (p.stuck) return FAIL;
-        const miss = Sim.missing(job);
-        if (miss.madeira + miss.pedra > 0) return DONE;
+        if (sumMat(Sim.missing(job)) > 0) return DONE;
         a.stage = 'build'; a.t = 0;
         face(p, b.x, b.y);
         say(S, p, 'construir', 0.3);
       }
-      job.progress = job.progress + dt * workSpeed(p, 'construcao') / job.work;
+      job.progress = job.progress + dt * workSpeed(p, 'construcao', 'construir') / job.work;
       p.skills.construcao += dt / 60 * Fam.xpFactor(S, p);
       a.t += dt;
       if (job.progress >= 1) { Sim.complete(S, b); return DONE; }
       return RUN;
     },
     end(S, p) {
-      if (p.carry && p.carry.k === 'obra') { S.stock.madeira += p.carry.madeira; S.stock.pedra += p.carry.pedra; p.carry = null; }
+      if (p.carry && p.carry.k === 'obra') { for (const k of MATS) S.stock[k] += p.carry[k] || 0; p.carry = null; }
     },
   };
 
@@ -814,20 +1082,303 @@
     end(S, p) { if (p.carry && p.carry.fuel) { S.stock.madeira += p.carry.n; p.carry = null; } },
   };
 
+  // caça (lança): escolhe uma capivara, chega perto, arremessa; acertou, carneia e leva carne e couro.
+  // Com o arco e flecha (Etapa 8), atira de longe, acerta mais e a flecha não espanta o bando
+  const cacaR = (S) => (G.Inv ? G.Inv.cacaR(S) : C.CACA_R);
+  function approach(S, p, e) {
+    const w = S.world, ex = e.x, ey = e.y;
+    const r = W.findNearest(w, tileOf(S, p), (i) => {
+      const x = i % w.W + 0.5, y = ((i / w.W) | 0) + 0.5;
+      return Math.hypot(x - ex, y - ey) <= cacaR(S) - 0.4 ? 1 : 0;
+    }, 160);
+    if (!r) return false;
+    setPath(p, r.path.length ? r.path : null);
+    return true;
+  }
+  ACT.caca = {
+    start(S, p, a) {
+      if (p.carry) return false;
+      if (!Tech.hasTool(S, p)) {
+        if (S.stock.ferramentas <= 0) return false;
+        S.stock.ferramentas--; p.tool = { dur: 100 };   // a lança vem do estoque de ferramentas
+      }
+      const e = G.Fauna.prey(S, p, 60);
+      if (!e) return false;
+      a.prey = e.id; e.res = p.id; a.shots = 0;
+      if (!approach(S, p, e)) { e.res = 0; return false; }
+      say(S, p, Tech.known(S, 'arco') && S.rng.next() < 0.5 ? 'arco' : 'caca', 0.4);
+      return true;
+    },
+    run(S, p, a, dt) {
+      const Fa = G.Fauna, e = Fa.get(S, a.prey);
+      if (!e || e.gone) return a.stage === 'haul' ? ACT.depositar.run(S, p) : FAIL;
+      if (a.stage === 'go') {
+        const d = Math.hypot(e.x - p.x, e.y - p.y);
+        if (e.state !== 'morta' && d <= cacaR(S)) { a.stage = 'aim'; a.t = 0; p.path = null; face(p, Math.floor(e.x), Math.floor(e.y)); return RUN; }
+        if (e.state === 'morta') return FAIL;
+        a.t += dt;
+        // a presa anda: refaz o caminho de tempos em tempos
+        if (!moving(p) || a.t - (a.repath || 0) >= 15) {
+          a.repath = a.t;
+          if (p.stuck || !approach(S, p, e)) { p.stuck = false; a.fails = (a.fails || 0) + 1; if (a.fails > 3) return FAIL; }
+        }
+        return a.t > 240 ? FAIL : RUN;   // correu demais atrás
+      }
+      if (a.stage === 'aim') {
+        if (Math.hypot(e.x - p.x, e.y - p.y) > cacaR(S) + 1.2) { a.stage = 'go'; a.t = 0; a.repath = -99; return RUN; }
+        face(p, Math.floor(e.x), Math.floor(e.y));
+        a.t += dt * workSpeed(p, 'caca', 'caca');
+        p.skills.caca += dt / 60 * Fam.xpFactor(S, p);
+        if (a.t < C.CACA_AIM_MIN) return RUN;
+        a.shots++;
+        const bow = !!(G.Inv && Tech.known(S, 'arco'));
+        S.events.push({ k: 'throw', x1: p.x, y1: p.y - 0.4, x2: e.x, y2: e.y, bow });
+        const bando = Fa.alive(S).filter((o) => o !== e && o.h === e.h && Math.hypot(o.x - e.x, o.y - e.y) < 7);
+        if (S.rng.next() < C.CACA_HIT + C.CACA_HIT_LVL * lvl(p, 'caca') + (G.Inv ? G.Inv.cacaHit(S) : 0)) {
+          if (bow) S.stats.arrowKills = (S.stats.arrowKills || 0) + 1;
+          Fa.kill(S, e);
+          for (const o of bando) Fa.scare(S, o, p.x, p.y);
+          say(S, p, 'acertou', 0.8, true);
+          const w = S.world, ex = Math.floor(e.x), ey = Math.floor(e.y);
+          route(S, p, (i) => { const x = i % w.W, y = (i / w.W) | 0; return Math.max(Math.abs(x - ex), Math.abs(y - ey)) <= 1 ? 1 : 0; }, 60);
+          a.stage = 'cut'; a.t = 0;
+          return RUN;
+        }
+        Fa.scare(S, e, p.x, p.y);
+        if (!bow) for (const o of bando) Fa.scare(S, o, p.x, p.y);   // a lança faz barulho; a flecha, não
+        if (a.shots >= (G.Inv ? G.Inv.cacaShots(S) : C.CACA_SHOTS)) { say(S, p, 'escapou', 0.7, true); return DONE; }
+        say(S, p, 'errou', 0.5);
+        a.stage = 'go'; a.t = 0; a.repath = -99;
+        return RUN;
+      }
+      if (a.stage === 'cut') {
+        if (moving(p)) return RUN;
+        face(p, Math.floor(e.x), Math.floor(e.y));
+        a.t += dt;
+        if (a.t < C.CACA_CUT_MIN) return RUN;
+        Fa.remove(S, e);
+        S.stats.hunted++;
+        if (!S.stats.firstHunt) { S.stats.firstHunt = true; Sim.chron(S, p.name + ' voltou da primeira caçada com uma capivara nas costas.'); }
+        const y = G.Inv ? G.Inv.cacaYield(S) : { carne: C.CACA_CARNE, couro: C.CACA_COURO };   // com a faca, carneia melhor
+        p.carry = { k: 'caca', carne: y.carne, couro: y.couro, n: y.carne + y.couro };
+        a.stage = 'haul';
+        return toCamp(S, p) ? RUN : FAIL;
+      }
+      if (moving(p)) return RUN;
+      if (p.stuck) return FAIL;
+      deposit(S, p);
+      return DONE;
+    },
+    end(S, p, a) {
+      const e = G.Fauna.get(S, a.prey);
+      if (e && e.res === p.id) e.res = 0;
+    },
+  };
+
+  // ofício (pedra lascada): no acampamento, lasca pedra e encaba ferramentas; com couro, costura roupas
+  // Ofício: ferramentas e roupas no acampamento; tábuas na marcenaria, mantas e redes na tecelagem (Etapa 7)
+  const PIECE = { ferramentas: 'ferramenta', roupas: 'roupa', tabuas: 'tábua', mantas: 'manta', redes: 'rede' };
+  const craftPlan = (S) => (G.Obras ? G.Obras.oficioPlan(S) : Tech.oficioPlan(S));
+  const craftCost = (k) => (G.Obras ? G.Obras.costOf(k) : k === 'roupas' ? C.ROUPA_COST : C.TOOL_COST);
+  ACT.oficio = {
+    start(S, p, a) {
+      if (p.carry) return false;
+      const plan = craftPlan(S);
+      if (!plan) return false;
+      a.make = plan.k; a.shop = plan.b ? plan.b.id : 0;
+      return !!toCamp(S, p);
+    },
+    run(S, p, a, dt) {
+      if (a.stage === 'go') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        // pega o material (volta ao estoque se largar no meio); na oficina, leva para até 3 peças de uma vez
+        const cost = craftCost(a.make);
+        let n = a.shop ? 3 : 1;
+        for (const k in cost) n = Math.min(n, Math.floor((S.stock[k] || 0) / cost[k]));
+        if (n <= 0) return FAIL;
+        const back = {};
+        for (const k in cost) { S.stock[k] -= cost[k] * n; back[k] = cost[k] * n; }
+        p.carry = { k: 'oficio', n: 0, back };
+        a.pieces = n; a.t = 0;
+        if (a.shop) {
+          const b = Sim.building(S, a.shop);
+          if (!b || !b.built || !toBuilding(S, p, b)) return FAIL;
+          a.stage = 'walk';
+          return RUN;
+        }
+        a.stage = 'work'; p.dir = 0;
+        say(S, p, 'oficio', 0.3);
+      }
+      if (a.stage === 'walk') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        const b = Sim.building(S, a.shop);
+        if (b) face(p, b.x + b.w / 2, b.y + b.h / 2);
+        a.stage = 'work'; a.t = 0;
+        say(S, p, a.make === 'tabuas' ? 'marcenaria' : 'tear', 0.4);
+      }
+      const b = a.shop ? Sim.building(S, a.shop) : null;
+      if (a.shop && (!b || !b.built)) return FAIL;
+      a.t += dt * workSpeed(p, 'oficio', 'oficio');
+      p.skills.oficio += dt / 60 * Fam.xpFactor(S, p);
+      const need = G.Obras ? G.Obras.minutesOf(S, a.make, b) : C.OFICIO_MIN * (a.make === 'roupas' ? 1.5 : 1);
+      if (a.t < need) return RUN;
+      // uma peça pronta
+      a.t = 0;
+      const cost = craftCost(a.make);
+      for (const k in cost) p.carry.back[k] -= cost[k];
+      if (G.Obras) G.Obras.make(S, a.make, 1); else Tech.make(S, a.make, 1);
+      if (b) Sim.float(S, b.x + b.w / 2, b.y, '+1 ' + PIECE[a.make]);
+      else Sim.float(S, S.camp.x + 1, S.camp.y + 0.6, '+1 ' + PIECE[a.make]);
+      a.done = (a.done || 0) + 1;
+      if (--a.pieces > 0) return RUN;
+      p.carry = null;
+      // no acampamento, se ainda falta e dá, emenda a próxima peça (até 3 por vez)
+      if (!a.shop) {
+        const next = craftPlan(S);
+        if (next && !next.b && a.done < 3) { a.make = next.k; a.stage = 'go'; return RUN; }
+      }
+      return DONE;
+    },
+    end(S, p) { if (p.carry && p.carry.k === 'oficio') giveBack(S, p); },
+  };
+
+  // caminhos (Etapa 7): abre o caminho marcado, passo a passo; o de pedra leva pedra do estoque
+  function nextRoad(S, p, a, far) {
+    const w = S.world, stones = p.carry && p.carry.k === 'caminho' ? p.carry.n : 0;
+    const test = (i) => (w.roadJob[i] && (w.roadJob[i] < 3 || stones > 0) ? 1 : 0);
+    const r = W.findNearest(w, tileOf(S, p), test, far || 14);
+    if (!r) return false;
+    a.i = r.idx;
+    if (r.path.length) setPath(p, r.path); else p.path = null;
+    a.stage = 'go';
+    return true;
+  }
+  ACT.caminho = {
+    start(S, p, a) {
+      if (p.carry) return false;
+      const Ob = G.Obras, w = S.world;
+      if (!Ob || !Ob.roadNeed(S)) return false;
+      const stone = S.stock.pedra > 0;
+      const r = W.findNearest(w, tileOf(S, p), (i) => (w.roadJob[i] && (w.roadJob[i] < 3 || stone) ? 1 : 0), C.SEARCH_FAR);
+      if (!r) { S.obras.blockedUntil = S.t + 12 * 60; return false; }   // nada ao alcance: ninguém tenta por meio dia
+      if (w.roadJob[r.idx] >= 3) {
+        // de pedra: passa no estoque e leva o que dá
+        const want = S.obras.jobs.filter((j) => j.lv >= 3).length;
+        a.stones = Math.max(1, Math.min(Fam.carryCap(S, p), S.stock.pedra, want));
+        if (!toCamp(S, p)) return false;
+        a.stage = 'fetch';
+        return true;
+      }
+      a.i = r.idx;
+      if (r.path.length) setPath(p, r.path);
+      a.stage = 'go';
+      return true;
+    },
+    run(S, p, a, dt) {
+      const Ob = G.Obras;
+      if (a.stage === 'fetch') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        const n = Math.min(a.stones, S.stock.pedra);
+        if (n <= 0) return FAIL;
+        S.stock.pedra -= n;
+        p.carry = { k: 'caminho', n, back: { pedra: n } };
+        return nextRoad(S, p, a, C.SEARCH_FAR) ? RUN : FAIL;
+      }
+      if (a.stage === 'go') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        a.stage = 'work';
+        say(S, p, 'caminho', 0.2);
+      }
+      const j = Ob.jobAt(S, a.i);
+      if (!j) return nextRoad(S, p, a) ? RUN : DONE;
+      if (j.lv >= 3 && !(p.carry && p.carry.k === 'caminho' && p.carry.n > 0)) return DONE;   // acabou a pedra
+      j.prog = (j.prog || 0) + dt * workSpeed(p, 'construcao', 'construir') / C.ROAD_WORK[j.lv];
+      p.skills.construcao += dt / 60 * Fam.xpFactor(S, p) * 0.5;
+      a.worked = (a.worked || 0) + dt;
+      if (j.prog < 1) return RUN;
+      if (j.lv >= 3) { p.carry.n--; p.carry.back.pedra--; if (p.carry.n <= 0) p.carry = null; }
+      Ob.finishRoad(S, j);
+      if (a.worked > 180) return DONE;   // três horas de caminho por vez
+      return nextRoad(S, p, a) ? RUN : DONE;
+    },
+    end(S, p) { if (p.carry && p.carry.k === 'caminho') giveBack(S, p); },
+  };
+
+  // conservar (defumar e secar): leva peixe ou carne ao moquém, fruta ao jirau, e arma a carga
+  ACT.conservar = {
+    start(S, p, a) {
+      if (p.carry) return false;
+      const plan = Tech.conservePlan(S);
+      if (!plan) return false;
+      a.b = plan.b.id; a.k = plan.k; a.n = plan.n; a.wood = plan.wood;
+      if (!toCamp(S, p)) return false;
+      plan.b.loading = p.id;   // ninguém mais vai para esta obra
+      a.stage = 'fetch';
+      return true;
+    },
+    run(S, p, a, dt) {
+      const b = Sim.building(S, a.b);
+      if (!b || !b.built || b.batch) return FAIL;
+      if (a.stage === 'fetch') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        const n = Math.min(a.n, Math.round(Fam.carryCap(S, p) * 1.2), S.stock[a.k]), wood = Math.min(a.wood, S.stock.madeira);
+        if (n < 3 || wood < a.wood) return FAIL;
+        S.stock[a.k] -= n; S.stock.madeira -= wood;
+        const back = {}; back[a.k] = n; if (wood) back.madeira = wood;
+        p.carry = { k: a.k, n, back };
+        a.n = n;
+        if (!toBuilding(S, p, b)) return FAIL;
+        a.stage = 'go';
+        say(S, p, 'conservar', 0.3);
+        return RUN;
+      }
+      if (a.stage === 'go') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        a.stage = 'load'; a.t = 0; face(p, b.x, b.y);
+      }
+      a.t += dt;
+      if (a.t < 20) return RUN;
+      p.carry = null;
+      Tech.load(S, b, a.k, a.n);
+      return DONE;
+    },
+    end(S, p, a) {
+      const b = Sim.building(S, a.b);
+      if (b && b.loading === p.id) b.loading = 0;
+      if (p.carry && p.carry.back) giveBack(S, p);
+    },
+  };
+
   // ---------- notas ----------
+  // com quem conversar: o mais perto; quem está bem procura primeiro quem está de luto (consolo).
+  // Brigados se evitam até a raiva passar. Na lua cheia a conversa vai até as 23 h.
   function chatPartner(S, p) {
-    if (S.ctx.night || p.needs.social > 78 || p.chatCool > S.t) return null;
-    let best = null, bd = 8;
+    const Li = G.Life;
+    const late = S.ctx.night && !(Li && Li.moonUp(S) && S.ck.hour < 23 && S.ck.hour >= 18);
+    if (late || p.chatCool > S.t) return null;
+    const comfort = !!Li && p.mood >= 45 && Fam.age(S, p) >= 12 && !Li.grieving(S, p);
+    let best = null, bd = 8, griever = null, gd = 14;
     for (const q of S.people) {
       if (q === p || !q.alive || q.carriedBy || q.labor || q.sleeping || q.inTent || q.chatCool > S.t) continue;
+      if (Li && Li.avoid(S, p, q)) continue;
       const qa = q.act;
       if (qa && !(WORK_SET.has(qa.type) || qa.type === 'vagar')) continue;
       if (q.needs.sede < 30 || q.needs.fome < 25 || q.needs.calor < 30) continue;
       const d = Math.hypot(q.x - p.x, q.y - p.y);
+      if (comfort && d < gd && Li.grieving(S, q) && !Li.consoled(S, q)) { gd = d; griever = q; }
       if (d < bd) { bd = d; best = q; }
     }
-    return best;
+    if (griever) return { q: griever, hint: 'consolo' };
+    if (p.needs.social > 78 || !best) return null;
+    return { q: best };
   }
+  const fineNow = (p) => p.needs.fome >= 30 && p.needs.sede >= 30 && p.needs.energia >= 20 && p.needs.calor >= 30;
   function foodFactor(S) {
     const d = S.ctx.foodDays;
     if (d > 60) return 0.2;
@@ -839,10 +1390,33 @@
     switch (wk) {
       case 'frutas': return ctx.bushFruit > 0 ? foodFactor(S) * Math.min(1, ctx.bushFruit / 12) : 0;
       case 'pesca': return foodFactor(S) * 0.95;
-      case 'agua': return st.agua >= C.WATER_CAP - 2 ? 0 : st.agua < 8 ? 1.3 : 1;
+      case 'agua': return st.agua >= Tech.waterCap(S) - 2 ? 0 : st.agua < 8 ? 1.3 : 1;
+      case 'caca': {
+        // capivara: couro para quem está sem roupa, e carne quando a comida aperta
+        if (!G.Fauna.alive(S).length) return 0;
+        const gap = Tech.needClothes(S) - st.roupas - Math.floor(st.couro / C.ROUPA_COST.couro);
+        return Math.max(gap > 0 ? 1.3 : 0, foodFactor(S) * 0.7);
+      }
+      case 'argila': {
+        if (ctx.matShort.argila > 0) return 2.0;
+        const forno = S.buildings.some((b) => b.type === 'forno');
+        return !forno && st.argila < C.BUILD.forno.cost.argila ? 0.8 : 0;
+      }
+      case 'oficio': { const plan = G.Obras ? G.Obras.oficioPlan(S) : Tech.oficioPlan(S); return plan ? (plan.gap >= 3 || plan.pri >= 4 ? 1.5 : 1.1) : 0; }
+      case 'caminho': return G.Obras && G.Obras.roadNeed(S) ? 0.95 : 0;
+      case 'conservar': {
+        const plan = Tech.conservePlan(S);
+        if (!plan) return 0;
+        // verão e outono: é a hora de guardar para o inverno; com muito guardado, sem pressa
+        const kept = Tech.keptDays(S) >= C.CONSERVA_DAYS[0] ? 0.5 : 1;
+        return (S.ck.season === 1 || S.ck.season === 2 ? 1.5 : 1.1) * (plan.n >= 8 ? 1.1 : 0.9) * kept;
+      }
       case 'madeira': {
-        if (ctx.jobNeeds.madeira > st.madeira) return 2.2;
+        if (ctx.matShort.madeira > 0) return 2.2;
         let f = st.madeira < 10 ? 1.35 : st.madeira > 200 ? 0.15 : st.madeira > 100 ? 0.45 : 1;
+        // Etapa 7: a fibra vem da embira das árvores cortadas (obra pedindo fibra, ou a tecelagem sem fibra)
+        const Ob = G.Obras;
+        if (Ob && Ob.embira(S) && (ctx.matShort.fibra > 0 || (Ob.shopOf(S, 'tecido') && st.fibra < C.REDE_FIBRA * 2 && (Ob.needMantas(S) > 0 || Ob.needRedes(S) > 0)))) f = Math.max(f, 1.4);
         // lenha para o frio: com fogueira e tempo frio, pouca lenha vira prioridade
         if (ctx.fire && (S.ck.season >= 2 || S.temp < 14)) {
           const days = st.madeira / 6;
@@ -851,7 +1425,9 @@
         return f;
       }
       case 'pedra': {
-        if (ctx.jobNeeds.pedra > st.pedra) return 2.2;
+        if (ctx.matShort.pedra > 0) return 2.2;
+        // ferramenta faltando e nenhuma pedra para lascar: buscar pedra vira prioridade
+        if (st.pedra < 3 && Tech.known(S, 'pedra') && Tech.toolTarget(S) > st.ferramentas) return 1.8;
         return st.pedra > 40 ? 0.15 : st.pedra > 20 ? 0.5 : 1;
       }
       case 'construir': return ctx.jobDoable ? 1.35 : 0;
@@ -882,12 +1458,24 @@
     const heat = ctx.fireLit || ctx.tents > 0 || (S.god && S.god.auras.length > 0);
     const cal = feltCold(S, p);
     if (p.tempHere < C.COMFORT && heat && cal < 85) add('aquecer', urg(cal) * 115 + crit(cal));
-    const q = chatPartner(S, p);
-    if (q) add('conversar', urg(n.social) * 70 + 12, { q });
+    const cp = chatPartner(S, p);
+    if (cp) add('conversar', cp.hint === 'consolo' ? 40 + urg(n.social) * 30 : urg(n.social) * 70 + 12, cp);
+    // Etapa 6: festa, história ao pé do fogo
+    const life = S.life;
+    if (life && st !== 'bebe' && fineNow(p)) {
+      if (life.party && life.party.on) add('festa', 70 + urg(n.social) * 20 + (st === 'crianca' || st === 'jovem' ? 6 : 0));
+      if (life.story && life.story.teller !== p.id) {
+        // par e filhos de quem conta vêm com mais vontade
+        const t = person(S, life.story.teller), close = t && (Fam.isPartner(p, t) || p.mother === t.id || p.father === t.id);
+        if (G.Life.canListen(S, p, life.story)) add('ouvir', 44 + urg(n.social) * 30 + (st === 'crianca' || st === 'jovem' ? 18 : 0) + (close ? 10 : 0));
+      }
+      else if (!life.story && G.Life.canTell(S, p)) add('historia', G.Life.tellScore(S, p));
+    }
     for (const wk of WORK) {
-      const v = S.vontades[wk] | 0;
-      if (!v || !Fam.canWork(S, p, wk)) continue;
+      const v = S.vontades[VONT[wk] || wk] | 0;
+      if (!v || !Fam.canWork(S, p, wk) || !Tech.workOpen(S, wk)) continue;
       if (wk === 'fogo' && othersDoing(S, p, 'fogo')) continue;
+      if (wk === 'caca' && !Tech.hasTool(S, p) && S.stock.ferramentas <= 0) continue;   // sem lança não se caça
       const vw = Math.pow(C.VONTADE_W[v], G.God.obedience(S, p));
       let s = C.WORK_BASE * vw * campNeed(S, wk);
       if (!(s > 0)) continue;
@@ -897,6 +1485,7 @@
       if (sk) s *= 1 + 0.03 * lvl(p, sk);
       if (wk !== 'construir' && wk !== 'fogo' && othersDoing(S, p, wk)) s *= 0.8;
       if (ctx.night && wk !== 'fogo') s *= 0.45;
+      else if (ctx.hour >= 17.5 && wk !== 'fogo') s *= 0.75;   // de tardinha o trabalho afrouxa (é hora de história e de festa)
       s *= G.Narr.workMult(S, wk);   // nevasca, tempestade e lobos seguram o povo em casa
       add(wk, Math.min(C.WORK_CAP, s));
     }
@@ -913,6 +1502,7 @@
     p.act = null;
     const def = ACT[a.type];
     if (def && def.end) def.end(S, p, a, r);
+    if (r === DONE && WORK_SET.has(a.type)) p.lastWork = a.type;   // para o "o que você fez hoje?"
     if (a.obj && a.obj.res === p.id) a.obj.res = 0;
     p.path = null; p.stuck = false;
     if (r === FAIL) p.fail[a.type] = S.t + 30;
@@ -924,6 +1514,7 @@
     for (const c of list) {
       const a = { type: c.type, score: c.score, stage: 'go', t: 0 };
       if (c.q) a.q = c.q.id;
+      if (c.hint) a.hint = c.hint;
       p.stuck = false;
       if (ACT[c.type].start(S, p, a)) { p.act = a; p.nextEval = S.t + C.REEVAL_MIN; return a; }
       if (a.obj && a.obj.res === p.id) a.obj.res = 0;
@@ -984,6 +1575,7 @@
     if (!a) return;
     move(S, p, dt);
     const r = ACT[a.type].run(S, p, a, dt);
+    Tech.onWork(S, p, a, dt);   // prática para as descobertas e desgaste da ferramenta
     if (r !== RUN) { end(S, p, r); AI.decide(S, p); return; }
     const need = urgentNeed(S, p, a);
     if (need && (need === 'fugir' || (a.type !== 'beber' && a.type !== 'comer'))) {
@@ -999,7 +1591,9 @@
         if (best && best.type !== a.type) {
           const cur = list.find((c) => c.type === a.type);
           const cs = cur ? cur.score : 0;
-          if (best.score > cs * 1.3 + 10) { end(S, p, 0); AI.decide(S, p); }
+          // festa e história chamam: basta valer um pouco mais que o que está fazendo
+          const call = (best.type === 'festa' || best.type === 'ouvir') && best.score > cs + 5;
+          if (call || best.score > cs * 1.3 + 10) { end(S, p, 0); AI.decide(S, p); }
         }
       }
     }
@@ -1028,6 +1622,7 @@
     frutas: ['Indo colher frutas', 'Colhendo frutas', 'Levando frutas'],
     agua: ['Indo buscar água', 'Enchendo as cabaças', 'Levando água'],
     pesca: ['Indo pescar', 'Pescando', 'Levando peixe'],
+    argila: ['Indo buscar argila', 'Cavando barro na beira d\'água', 'Levando argila'],
   };
   AI.describe = function (S, p) {
     if (!p.alive) return 'Morreu ' + ({ frio: 'de frio', sede: 'de sede', fome: 'de fome', raio: 'atingido por um raio', parto: 'no parto', velhice: 'de velhice', lobos: 'no ataque dos lobos' }[p.cause] || '');
@@ -1039,10 +1634,37 @@
       case 'chegar': return 'Chegando ao novo lar';
       case 'depositar': return 'Guardando no estoque';
       case 'beber': return st === 'go' ? 'Indo beber água' : 'Bebendo água';
-      case 'comer': return st === 'go' ? 'Indo comer' : a.src === 'arbusto' ? 'Comendo frutas no pé' : a.hot ? 'Comendo peixe assado' : 'Comendo';
+      case 'comer': return st === 'go' ? 'Indo comer' : a.src === 'arbusto' ? 'Comendo frutas no pé' : a.hot === 'carne' ? 'Comendo carne assada' : a.hot ? 'Comendo peixe assado' :
+        a.kept === 'defumado' ? 'Comendo defumado' : a.kept === 'seca' ? 'Comendo fruta seca' : 'Comendo';
+      case 'caca': return st === 'aim' ? 'Mirando uma capivara' : st === 'cut' ? 'Carneando a capivara' : st === 'haul' ? 'Levando carne e couro' : 'Caçando capivara';
+      case 'oficio': {
+        const doing = { roupas: 'Costurando roupa de couro', ferramentas: 'Lascando ferramentas', tabuas: 'Serrando tábuas na marcenaria', mantas: 'Tecendo uma manta', redes: 'Tecendo uma rede' }[a.make] || 'No ofício';
+        const going = { roupas: 'roupas', ferramentas: 'ferramentas', tabuas: 'tábuas', mantas: 'uma manta', redes: 'uma rede' }[a.make] || 'o ofício';
+        return st === 'work' ? doing : 'Indo fazer ' + going;
+      }
+      case 'caminho': return st === 'work' ? 'Abrindo caminho' : st === 'fetch' ? 'Pegando pedra para o caminho' : 'Indo abrir caminho';
+      case 'conservar': {
+        const b = Sim.building(S, a.b), moq = b && b.type === 'moquem';
+        return st === 'fetch' ? 'Pegando comida para conservar' : st === 'load' ? (moq ? 'Armando o moquém' : 'Espalhando frutas no jirau') : moq ? 'Levando ao moquém' : 'Levando ao jirau';
+      }
       case 'dormir': return p.sleeping ? (p.inTent ? 'Dormindo na barraca' : 'Dormindo ao relento') : 'Indo dormir';
       case 'aquecer': return st === 'go' ? 'Indo se aquecer' : p.inTent ? 'Se aquecendo na barraca' : a.src === 'aura' ? 'Se aquecendo no calor de Deus' : 'Se aquecendo no fogo';
-      case 'conversar': { const o = person(S, a.with); return a.chat && a.chat.on ? 'Conversando com ' + (o ? o.name : '…') : 'Indo conversar'; }
+      case 'conversar': {
+        const o = person(S, a.with), nm = o ? o.name : '…', ch = a.chat;
+        if (!ch || !ch.on) return a.kind === 'consolo' && ch && ch.a === p.id ? 'Indo consolar ' + nm : 'Indo conversar';
+        const mine = ch.a === p.id, d = ch.d;
+        switch (a.kind) {
+          case 'consolo': return mine ? 'Consolando ' + nm : 'Recebendo o consolo de ' + nm;
+          case 'briga': return 'Brigando com ' + nm;
+          case 'pazes': return 'Fazendo as pazes com ' + nm;
+          case 'casal': return 'De chamego com ' + nm;
+          case 'ensino': return d && d.teacher === p.id ? 'Ensinando ' + nm : 'Aprendendo com ' + nm;
+        }
+        return 'Conversando com ' + nm;
+      }
+      case 'historia': return st === 'tell' ? 'Contando uma história ao pé do fogo' : 'Indo contar uma história';
+      case 'ouvir': { const t = person(S, a.teller); return st === 'listen' ? 'Ouvindo a história de ' + (t ? t.name : '…') : 'Indo ouvir uma história'; }
+      case 'festa': return st === 'dance' ? 'Dançando na festa' : 'Indo para a festa';
       case 'vagar': return 'Dando uma volta';
       case 'brincar': return st === 'play' ? 'Brincando' : 'Indo brincar';
       case 'parto': return p.labor && p.labor.hard && !p.labor.helped ? 'Em trabalho de parto difícil' : 'Em trabalho de parto';

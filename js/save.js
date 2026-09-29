@@ -37,6 +37,21 @@
     out.ents = (n.ents || []).map((e) => { const o = Object.assign({}, e); o.path = null; o.pathI = 0; o.x = +e.x.toFixed(2); o.y = +e.y.toFixed(2); delete o.px; delete o.py; return o; });
     return out;
   }
+  // capivaras vão sem o caminho (refazem ao carregar)
+  function packFauna(f) {
+    if (!f) return null;
+    const out = Object.assign({}, f);
+    out.ents = (f.ents || []).map((e) => { const o = Object.assign({}, e); o.path = null; o.pathI = 0; o.x = +e.x.toFixed(2); o.y = +e.y.toFixed(2); delete o.px; delete o.py; return o; });
+    return out;
+  }
+  // vida: a história em andamento não vai (acaba com o save); a festa marcada vai
+  function packLife(l) {
+    if (!l) return null;
+    const out = Object.assign({}, l);
+    out.story = null;
+    if (out.party && out.party.on) out.party = null;
+    return out;
+  }
   Save.serialize = function (S) {
     const w = S.world, objs = [], extra = [];
     for (let i = 0; i < w.objs.length; i++) {
@@ -48,7 +63,7 @@
     }
     const people = S.people.map((p) => {
       const q = {};
-      for (const k in p) if (['path', 'pathI', 'act', 'px', 'py', 'stuck', 'fail', 'seenTile'].indexOf(k) < 0) q[k] = p[k];
+      for (const k in p) if (['path', 'pathI', 'act', 'px', 'py', 'stuck', 'fail', 'seenTile', 'talk', 'visiting', 'host', 'say', 'sayKind'].indexOf(k) < 0) q[k] = p[k];
       if (p.inTent) { q.inTent = 0; }
       q.sleeping = false;
       return q;
@@ -58,6 +73,8 @@
       stock: S.stock, vontades: S.vontades, nextPid: S.nextPid, nextBid: S.nextBid,
       chron: S.chron, goals: S.goals, stats: S.stats, over: S.over, arrived: S.arrived,
       people, buildings: S.buildings, objs, graves: extra, god: S.god, seen: packSeen(S.seen), narr: packNarr(S.narr),
+      tech: S.tech || null, fauna: packFauna(S.fauna), opts: S.opts || null, life: packLife(S.life),
+      obras: G.Obras ? G.Obras.pack(S) : null,
       goalsPhase: S.goalsPhase || 1, era: S.era || '', famInit: !!S.famInit, savedAt: G.Net ? G.Net.now() : Date.now(),
     };
   };
@@ -88,6 +105,8 @@
       stock: d.stock, vontades: d.vontades, people: d.people, buildings: d.buildings,
       nextPid: d.nextPid, nextBid: d.nextBid, chron: d.chron, events: [], goals: d.goals, stats: d.stats,
       over: d.over, arrived: d.arrived, god: d.god || null, narr: d.narr || null, savedAt: d.savedAt || 0,
+      tech: d.tech || null, fauna: d.fauna || null, opts: d.opts || null, life: d.life || null,
+      obras: d.obras || null,
       seen: unpackSeen(d.seen, w.W * w.H),
       goalsPhase: d.goalsPhase || 1, era: d.era || '', famInit: !!d.famInit,
     };
@@ -117,6 +136,7 @@
     return {
       ano: ck.year, estacao: C.SEASONS[ck.season], dia: ck.dos, anos: Math.floor((S.t - C.START_HOUR * 60) / (C.DAY_MIN * C.YEAR_DAYS)),
       vivos: alive.length, nomes: alive.map((p) => p.name).slice(0, 4).join(', '), local: S.siteLabel, fim: !!S.over,
+      desc: G.Tech ? G.Tech.count(S) : 0, aldeia: !!(S.stats && S.stats.eraEnd),
     };
   };
   Save.read = function () {

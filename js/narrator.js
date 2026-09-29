@@ -306,11 +306,13 @@
         n.active.fartura = { t0: S.t, until: S.t + C.FARTURA_DAYS * D() };
         Sm.chron(S, 'Os arbustos carregaram como nunca: é tempo de fartura.');
         for (const p of alive(S)) Sm.addMem(S, p, 'fartura');
+        if (G.Life) G.Life.onGood(S, 'fartura');
         break;
       }
       case 'piracema':
         n.active.piracema = { t0: S.t, until: S.t + C.PIRACEMA_DAYS * D() };
         Sm.chron(S, 'Os peixes subiram o rio: é a piracema.');
+        if (G.Life) G.Life.onGood(S, 'piracema');
         break;
       case 'veranico':
         n.active.veranico = { t0: S.t, until: S.t + Math.round(rr(S, C.VERANICO_DAYS) * D()) };
@@ -322,6 +324,7 @@
         Sm.chron(S, (v ? v.name + ' achou' : 'Acharam') + ' uma colmeia no oco de um tronco: mel para vários dias.');
         S.events.push({ k: 'float', x: S.camp.x + 1, y: S.camp.y + 0.6, text: '+' + C.MEL_FOOD + ' comida' });
         for (const p of alive(S)) Sm.addMem(S, p, 'mel');
+        if (G.Life) G.Life.onGood(S, 'mel');
         break;
       }
       case 'andarilho': {
@@ -518,7 +521,7 @@
     return best;
   }
   function stockOpen(S) {
-    if (S.stock.frutas + S.stock.peixe <= 0) return false;
+    if (!(S.ctx && S.ctx.food > 0)) return false;
     const c = camp(S);
     return !repelAt(S, c.x, c.y);
   }
@@ -636,7 +639,7 @@
     const a = S.narr.active.lobos, Sm = Sim();
     p.biteCool = S.t + C.LOBO_BITE_MIN;
     if (a) { a.bitten = a.bitten || {}; a.bitten[p.id] = (a.bitten[p.id] || 0) + 1; }
-    const dmg = C.LOBO_BITE * N.kind(S).sev;
+    const dmg = C.LOBO_BITE * N.kind(S).sev * (G.Tech ? G.Tech.biteMult(S, p) : 1);   // com a lança na mão, pega menos
     p.needs.saude -= dmg;
     p.dmg.lobo = (p.dmg.lobo || 0) + dmg;
     e.nextBite = S.t + C.LOBO_BITE_MIN; e.bites++;
@@ -653,10 +656,15 @@
   }
   function steal(S, e) {
     const st = S.stock, a = S.narr.active.lobos;
-    let take = C.LOBO_STEAL;
-    const f = Math.min(take, st.peixe); st.peixe -= f; take -= f;
-    const fr = Math.min(take, st.frutas); st.frutas -= fr;
-    const got = f + fr;
+    e.fed = true;
+    // Etapa 7: com armazém de pé, a comida está guardada; o lobo fareja e vai embora sem nada
+    if (G.Obras && G.Obras.guarded(S)) {
+      if (a && !a.guardedToast) { a.guardedToast = true; Sim().toast(S, 'Um lobo farejou o armazém, mas não achou jeito de entrar.', 'good'); }
+      return;
+    }
+    let take = C.LOBO_STEAL, got = 0;
+    // o lobo quer carne e peixe; na falta, leva o que houver
+    for (const k of ['carne', 'peixe', 'defumado', 'frutas', 'seca']) { const n = Math.min(take, st[k] || 0); st[k] -= n; take -= n; got += n; }
     e.fed = true;
     if (a) a.stolen += got;
     if (got) {
@@ -683,7 +691,7 @@
     let f = 0, m = 0;
     for (const p of alive(S)) {
       const age = Fam().age(S, p);
-      if (age < 14 || age > 40 || Fam().partnerOf(S, p)) continue;
+      if (age < 14 || age > 40 || Fam().partners(S, p).length) continue;
       if (p.sex === 'F') f++; else m++;
     }
     return f === m ? (S.rng.chance(0.5) ? 'F' : 'M') : f < m ? 'F' : 'M';
@@ -780,6 +788,7 @@
       Sm.chron(S, Sm.listNames(names) + (names.length > 1 ? ' foram acolhidos.' : names[0].sex === 'F' ? ' foi acolhida.' : ' foi acolhido.') + ' Agora são ' + count + '.');
       g.state = 'acolhido';
       if (g.kind === 'casal' && n.couple) n.couple.state = 'acolhido';
+      if (G.Life) G.Life.onWelcome(S, names);   // festa de boas-vindas
     } else {
       for (const e of ents) { e.state = 'indo'; e.path = null; e.leftAt = e.t; }
       g.state = 'indo';

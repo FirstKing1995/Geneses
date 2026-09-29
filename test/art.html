@@ -3,15 +3,15 @@
 <body><canvas id="sheet"></canvas><canvas id="view"></canvas>
 <script src="../js/core.js"></script><script src="../js/config.js"></script><script src="../js/world.js"></script>
 <script src="../js/sim.js"></script>
-<script src="../js/family.js"></script><script src="../js/ai.js"></script>
+<script src="../js/family.js"></script><script src="../js/tech.js"></script><script src="../js/invencoes.js"></script><script src="../js/fauna.js"></script><script src="../js/ai.js"></script>
 <script src="../js/god.js"></script><script src="../js/narrator.js"></script><script src="../js/save.js"></script>
 <script src="../js/art.js"></script><script src="../js/render.js"></script>
 <script>
 const A = G.Art; const S = A.build();
 // folha de sprites
-const sh = document.getElementById('sheet'); sh.width = 1200; sh.height = 440;
+const sh = document.getElementById('sheet'); sh.width = 1200; sh.height = 1100;
 const x = sh.getContext('2d'); x.imageSmoothingEnabled = false;
-x.fillStyle = '#58a447'; x.fillRect(0,0,1200,440);
+x.fillStyle = '#58a447'; x.fillRect(0,0,1200,1100);
 let px = 4, py = 4, rowH = 0;
 function put(img, s) { s = s || 3; if (px + img.width*s > 1196) { px = 4; py += rowH + 6; rowH = 0; } x.drawImage(img, px, py, img.width*s, img.height*s); px += img.width*s + 6; rowH = Math.max(rowH, img.height*s); }
 for (let s=0;s<4;s++) for (let v=0;v<3;v++) put(S.broad[s][v]);
@@ -30,6 +30,15 @@ for (const n of ['madeira','pedra','agua','frutas','peixe','fogo','construir','e
 px = 4; py += rowH + 8; rowH = 0;
 for (let f = 0; f < 3; f++) put(A.wolfSheet(f), 4);
 for (const n of ['lobo','seca','pergunta','reza','raio','cura']) put(A.icon(n), 3);
+// Etapa 5: capivaras, obras novas, ícones das descobertas e roupa de couro
+px = 4; py += rowH + 8; rowH = 0;
+console.log('e5 start y', py);
+put(A.capiSheet(0), 4); put(A.capiSheet(1), 4); put(A.capiDead(), 4);
+put(S.moquem, 4); put(S.jirau, 4); put(S.forno, 4);
+for (const n of ['lasca','cesto','lanca','anzol','moquem','jirau','pote','forno','carne','couro','argila','ferramentas','roupas','defumado','frutaseca','revelacao','capivara']) put(A.icon(n), 4);
+const leather = [fake(11,'F',{skin:1,hair:'#181425',cloth:0,beard:false}), fake(12,'M',{skin:3,hair:'#3e2731',cloth:1,beard:true})];
+for (const p of leather) { p.roupa = { dur: 90 }; put(A.personSheet(p).sheet, 4); }
+console.log('sheet end y', py + rowH);
 </script>
 <script>
 // mundo

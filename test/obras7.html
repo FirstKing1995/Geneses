@@ -1,0 +1,71 @@
+<!doctype html><html><head><meta charset="utf-8"><title>obras da Etapa 7</title>
+<style>body{margin:0;background:#262b44} #view{width:1400px;height:860px;display:block}</style></head>
+<body><canvas id="view"></canvas>
+<script src="../js/core.js"></script><script src="../js/config.js"></script><script src="../js/world.js"></script>
+<script src="../js/sim.js"></script><script src="../js/family.js"></script><script src="../js/life.js"></script><script src="../js/tech.js"></script><script src="../js/invencoes.js"></script>
+<script src="../js/obras.js"></script><script src="../js/fauna.js"></script><script src="../js/ai.js"></script>
+<script src="../js/god.js"></script><script src="../js/narrator.js"></script><script src="../js/save.js"></script>
+<script src="../js/art.js"></script><script src="../js/render.js"></script>
+<script>
+// um mundo com todas as obras em todos os níveis e caminhos de todo tipo, para ver a arte no chão
+// ?seed=42&hour=13&season=0&zoom=3
+const q = new URLSearchParams(location.search);
+const seed = +(q.get('seed') || 42), hour = +(q.get('hour') || 13), season = +(q.get('season') || 0), zoom = +(q.get('zoom') || 3);
+const w = G.W.generate(seed), site = G.W.bestSite(w);
+const S = G.Sim.newGame(seed, site, ['Iara', 'Aruã'], w);
+S.seen.fill(1); S.seenRev++;
+S.t = (season * 15 + 3) * 1440 + hour * 60; G.Sim.refresh(S);
+const Sim = G.Sim, O = G.Obras;
+// aplaina um campo em volta do acampamento (só para a vitrine) e põe as obras em fileiras
+const cx = S.camp.x, cy = S.camp.y;
+const T = G.T;
+for (let y = cy - 16; y <= cy + 16; y++) for (let x = cx - 32; x <= cx + 32; x++) {
+  if (x < 1 || y < 1 || x >= w.W - 1 || y >= w.H - 1) continue;
+  const i = y * w.W + x;
+  w.elev[i] = 0.5; w.moist[i] = 0.5; w.riv[i] = 0.5; w.tile[i] = T.GRASS;
+  const o = G.W.objAt(w, i); if (o) G.W.removeObj(w, o);
+  G.W.refreshBlock(w, i);
+}
+S.camp.x = cx + 30; S.camp.y = cy + 14;   // o estoque fica no canto, fora da vitrine
+const put = (type, x, y, lv, kind, extra) => {
+  const err = Sim.canPlace(S, type, x, y);
+  if (err && type !== 'armazem') { console.log('não coube', type, x, y, err); return null; }
+  const def = G.CFG.BUILD[type];
+  const b = { id: S.nextBid++, type, lv: lv, kind: kind || null, x, y, w: def.w, h: def.h, built: true, progress: 1, have: {}, fuel: type === 'fogueira' ? 6 : 0, beds: [], up: null };
+  for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) { const i = (y + dy) * w.W + x + dx; w.bgrid[i] = b.id; G.W.refreshBlock(w, i); }
+  S.buildings.push(b);
+  Object.assign(b, extra || {});
+  return b;
+};
+const X0 = cx - 28;
+[1, 2, 3].forEach((lv, k) => { put('fogueira', X0 + k * 4, cy - 12, lv); put('fogueira', X0 + 14 + k * 4, cy - 12, lv, null, { fuel: 0 }); });
+[[1], [2], [3, 'oca'], [3, 'palafita'], [3, 'barro'], [3, 'pedra']].forEach(([lv, kind], k) => put('barraca', X0 + k * 5, cy - 7, lv, kind));
+put('moquem', X0, cy - 1, 1); put('moquem', X0 + 3, cy - 1, 2);
+put('jirau', X0 + 6, cy - 1, 1); put('jirau', X0 + 10, cy - 1, 2);
+put('forno', X0 + 14, cy - 2, 1); put('forno', X0 + 18, cy - 2, 2);
+['armazem', 'marcenaria', 'tecelagem'].forEach((t, k) => { put(t, X0 + k * 10, cy + 4, 1); put(t, X0 + k * 10 + 4, cy + 4, 2); });
+S.stock.tabuas = 12; S.stock.fibra = 12; S.stock.mantas = 2; S.stock.redes = 1; S.stock.frutas = 60; S.stock.peixe = 20; S.stock.defumado = 20;
+G.Sim.refresh(S);
+// caminhos: uma cruz de terra, um anel de pedra, uma trilha em diagonal, um encontro dos três e os marcados por abrir
+const road = (x, y, v) => { const i = y * w.W + x; O.setRoad(S, i, v); };
+const RX = cx + 4;
+for (let x = RX; x <= RX + 22; x++) road(x, cy - 3, 2);
+for (let y = cy - 13; y <= cy + 9; y++) road(RX + 11, y, 2);
+for (let k = 0; k < 9; k++) road(RX + 1 + k, cy - 13 + k, 1);
+for (let x = RX + 14; x <= RX + 21; x++) { road(x, cy - 12, 3); road(x, cy - 7, 3); }
+for (let y = cy - 12; y <= cy - 7; y++) { road(RX + 14, y, 3); road(RX + 21, y, 3); }
+for (let k = 0; k < 6; k++) road(RX + 13 + k, cy + 2 + k, 1);
+for (let x = RX + 14; x <= RX + 22; x++) road(x, cy + 5, 3);
+for (let x = RX; x <= RX + 5; x++) O.markRoad(S, (cy + 11) * w.W + x, 2);
+for (let x = RX + 6; x <= RX + 9; x++) O.markRoad(S, (cy + 11) * w.W + x, 3);
+S.obras.jobs[0].prog = 0.6;
+// gente: dormindo de manta perto da fogueira do centro; levando tábuas pelo caminho
+const p = S.people[0]; p.act = null; p.sleeping = true; p.manta = { dur: 80 }; p.x = X0 + 9.5; p.y = cy - 10.2; p.px = p.x; p.py = p.y;
+const p2 = S.people[1]; p2.act = null; p2.carry = { k: 'obra', n: 4, tabuas: 4 }; p2.x = RX + 6.5; p2.y = cy - 2.5; p2.px = p2.x; p2.py = p2.y; p2.path = null;
+S.events.length = 0;
+const v = document.getElementById('view');
+G.Art.build(); G.R.init(v); G.R.cam.x = (cx - 2 + +(q.get('dx') || 0)) * 16; G.R.cam.y = (cy - 2 + +(q.get('dy') || 0)) * 16; G.R.cam.zoom = zoom;
+let n = 0; function frame(now) { G.R.draw(S, 1, now); if (++n < 20) requestAnimationFrame(frame); else document.title = 'pronto'; }
+requestAnimationFrame(frame);
+window.S = S;
+</script></body></html>

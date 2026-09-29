@@ -9,7 +9,9 @@
     raio: { name: 'Raio', cost: 15, r: 0.9, icon: 'raio', desc: 'Derruba árvore ou pedra e espanta lobos. Em alguém, pune.', answers: 'lobos' },
     chuva: { name: 'Chuva', cost: 15, r: 12, icon: 'chuva', desc: 'Frutas fora de época e cabaças cheias.', answers: 'fome sede' },
     cura: { name: 'Cura', cost: 20, r: 0.9, icon: 'cura', desc: 'Devolve a saúde de alguém e salva um parto difícil.', answers: 'parto doente', unlock: 'familia' },
+    revelacao: { name: 'Revelação', cost: C.REVELACAO_COST, r: 0.9, icon: 'revelacao', desc: 'Num sonho, entrega a alguém a próxima descoberta, se o povo já começou a entender.', answers: '', unlock: 'descoberta' },
   };
+  const LOCKED = { familia: 'A Cura chega com o primeiro filho.', descoberta: 'A Revelação chega com a primeira descoberta.' };
   const PRAYERS = {
     frio: ['Deus, está frio demais.', 'Céu, manda um pouco de calor.'],
     fome: ['Deus, temos fome.', 'Céu, não deixa a gente passar fome.'],
@@ -19,7 +21,14 @@
   const THANKS = ['Ele ouviu!', 'Obrigado, céu!', 'Eu sabia que alguém olhava por nós.'];
   God.PRAYER_HELP = { frio: 'calor', fome: 'chuva', sede: 'chuva', parto: 'cura', doente: 'cura', lobos: 'raio' };
   const PRAYER_H = { lobos: 2 };   // prazo curto: lobo não espera
-  God.unlocked = (S, kind) => { const m = God.MIRACLES[kind]; return !m || !m.unlock || (m.unlock === 'familia' && (S.stats.births || 0) > 0); };
+  God.unlocked = (S, kind) => {
+    const m = God.MIRACLES[kind];
+    if (!m || !m.unlock) return true;
+    if (m.unlock === 'familia') return (S.stats.births || 0) > 0;
+    if (m.unlock === 'descoberta') return !!(G.Tech && G.Tech.count(S) > 0);
+    return false;
+  };
+  God.lockedText = (kind) => LOCKED[(God.MIRACLES[kind] || {}).unlock] || '';
 
   const has = (p, t) => p.traits.indexOf(t) >= 0;
   function Sim() { return G.Sim; }
@@ -76,8 +85,9 @@
     const cura = God.unlocked(S, 'cura');
     // parto difícil: ela reza, e quem ama reza por ela
     if (p.labor && p.labor.hard && !p.labor.helped) return { kind: 'parto', target: p.id, text: 'Deus, me ajuda neste parto!' };
-    const mate = Fm.partnerOf(S, p);
-    if (mate && mate.labor && mate.labor.hard && !mate.labor.helped) return { kind: 'parto', target: mate.id, text: 'Deus, salva a ' + mate.name + ' e o bebê!' };
+    for (const mate of Fm.partners(S, p)) {
+      if (mate.labor && mate.labor.hard && !mate.labor.helped) return { kind: 'parto', target: mate.id, text: 'Deus, salva a ' + mate.name + ' e o bebê!' };
+    }
     if (cura) {
       for (const k of Fm.family(S, p)) {
         const q = k.q;
@@ -104,14 +114,35 @@
     if (kind === 'lobos') return !!(G.Narr && G.Narr.wolvesOut(S));
     return false;
   }
+  // agradecimento (e luto): não pede nada, não espera resposta; a fé de quem agradece vira Poder (Etapa 6)
+  God.thank = function (S, p, text, poder, loud, kind) {
+    const g = S.god;
+    if (!g || !p || !p.alive) return false;
+    g.poder += poder;
+    g.thanks = (g.thanks || 0) + 1;
+    g.thanksPoder = (g.thanksPoder || 0) + poder;
+    if (kind !== 'luto') { God.faith(S, p, 2); G.Sim.addMem(S, p, 'agradeceu'); }
+    if (text) G.Sim.say(S, p, text, true, 'god');
+    if (loud && text) S.events.push({ k: 'thanks', pid: p.id, kind: kind || 'gratidao', poder, text: p.name + (kind === 'luto' ? ' reza: “' : ' agradece: “') + text + '” +' + poder + ' de Poder' });
+    return true;
+  };
+  const MORNING = [(p) => 'Obrigad' + (p.sex === 'F' ? 'a' : 'o') + ' por mais um dia.', () => 'Bom dia, céu.', () => 'Cuida da gente hoje, tá?'];
   God.hourly = function (S) {
     const g = S.god, Sm = G.Sim;
-    // Poder nasce da fé do povo
+    // Poder nasce da fé do povo, e não tem teto (Etapa 6): guarde para os grandes atos
     let sum = 0;
     for (const p of S.people) if (p.alive) sum += p.fe / 100;
-    g.poder = Math.min(C.POWER_MAX, g.poder + sum * C.POWER_PER_FAITH_H);
+    g.poder += sum * C.POWER_PER_FAITH_H;
     g.auras = g.auras.filter((a) => a.until > S.t);
     if (S.safe) return;   // com o jogo fechado ninguém reza nem é ignorado
+    // de manhã, quem tem muita fé agradece pelo dia
+    if (Math.floor(S.ck.hour) === 7) {
+      for (const p of S.people) {
+        if (!p.alive || p.sleeping || p.carriedBy || p.prayer || G.Family.age(S, p) < 7) continue;
+        if (p.fe < (has(p, 'Devoto') ? 55 : 70) || !S.rng.chance(0.3)) continue;
+        God.thank(S, p, S.rng.pick(MORNING)(p), C.THANKS.manha, false);
+      }
+    }
     for (const p of S.people) {
       if (!p.alive) continue;
       if (p.prayer) {
@@ -190,10 +221,11 @@
       God.faith(S, p, C.FAITH_ANSWER);
       for (const q of S.people) if (q !== p && q.alive && Math.hypot(q.x - p.x, q.y - p.y) < 10) God.faith(S, q, C.FAITH_ANSWER_SEEN);
       Sm.addMem(S, p, 'oracaoAtendida');
-      Sm.say(S, p, S.rng.pick(THANKS), true);
+      Sm.say(S, p, S.rng.pick(THANKS), true, 'god');
       S.god.answered++;
+      S.god.poder += C.THANKS.oracao; S.god.thanksPoder = (S.god.thanksPoder || 0) + C.THANKS.oracao;
       God.align(S, 5);
-      S.events.push({ k: 'toast', text: 'Você atendeu à oração de ' + p.name + '. A fé subiu.', tone: 'good' });
+      S.events.push({ k: 'toast', text: 'Você atendeu à oração de ' + p.name + '. A fé subiu, e o agradecimento dá +' + C.THANKS.oracao + ' de Poder.', tone: 'good' });
       // atendida, pode pedir de novo quando o milagre acabar
       p.prayer = null; p.prayCool = S.t + C.PRAYER_ANSWERED_COOLDOWN_H * 60;
       n++;
@@ -211,10 +243,11 @@
       if (!p.alive || !p.prayer || kinds.indexOf(p.prayer.kind) < 0 || p.prayer.target !== targetId) continue;
       God.faith(S, p, C.FAITH_ANSWER);
       Sm.addMem(S, p, 'oracaoAtendida');
-      Sm.say(S, p, S.rng.pick(THANKS), true);
+      Sm.say(S, p, S.rng.pick(THANKS), true, 'god');
       S.god.answered++;
+      S.god.poder += C.THANKS.oracao; S.god.thanksPoder = (S.god.thanksPoder || 0) + C.THANKS.oracao;
       God.align(S, 5);
-      S.events.push({ k: 'toast', text: 'Você atendeu à oração de ' + p.name + '. A fé subiu.', tone: 'good' });
+      S.events.push({ k: 'toast', text: 'Você atendeu à oração de ' + p.name + '. A fé subiu, e o agradecimento dá +' + C.THANKS.oracao + ' de Poder.', tone: 'good' });
       p.prayer = null; p.prayCool = S.t + C.PRAYER_ANSWERED_COOLDOWN_H * 60;
       n++;
     }
@@ -232,11 +265,23 @@
     return best;
   };
 
+  // quem recebe a Revelação: a pessoa mais perto do toque, de 7 anos para cima
+  God.dreamTarget = function (S, x, y) {
+    let best = null, bd = 1.3;
+    for (const p of S.people) {
+      if (!p.alive || p.carriedBy || G.Family.age(S, p) < 7) continue;
+      const d = Math.hypot(p.x - (x + 0.5), p.y - (y + 0.5));
+      if (d <= bd) { bd = d; best = p; }
+    }
+    return best;
+  };
+
   // ---------- milagres ----------
   God.canCast = function (S, kind) {
     const m = God.MIRACLES[kind];
     if (!m) return 'Milagre desconhecido';
-    if (!God.unlocked(S, kind)) return 'A Cura chega com o primeiro filho.';
+    if (!God.unlocked(S, kind)) return God.lockedText(kind);
+    if (kind === 'revelacao') { const why = G.Tech.canReveal(S); if (why) return why; }
     if (S.god.poder < m.cost) return 'Falta Poder: precisa de ' + m.cost + '.';
     return '';
   };
@@ -248,13 +293,23 @@
     if (!Sm.isSeen(S, x, y)) return { ok: false, msg: 'A névoa cobre esse lugar. Deus só age onde o povo já esteve.' };
     const healed = kind === 'cura' ? God.curaTarget(S, x, y) : null;
     if (kind === 'cura' && !healed) return { ok: false, msg: 'Toque em alguém para curar.' };
+    const dreamer = kind === 'revelacao' ? God.dreamTarget(S, x, y) : null;
+    if (kind === 'revelacao' && !dreamer) return { ok: false, msg: 'Toque em alguém (de 7 anos ou mais) para revelar.' };
     g.poder -= m.cost;
     g.miracles++;
     g.lastGrace = S.t;
     let msg = '';
     // quem viu, se admira
     for (const p of S.people) if (p.alive && near(p, x, y, 8)) { God.faith(S, p, C.FAITH_MIRACLE_SEEN); if (kind !== 'raio') Sm.addMem(S, p, 'viuMilagre'); }
-    if (kind === 'cura') {
+    if (kind === 'revelacao') {
+      const id = G.Tech.reveal(S, dreamer);
+      God.faith(S, dreamer, C.FAITH_ANSWER);
+      for (const q of S.people) if (q.alive && q !== dreamer) God.faith(S, q, C.FAITH_MIRACLE_SEEN);
+      God.align(S, 3);
+      Sm.say(S, dreamer, 'Eu vi… eu sei como fazer!', true);
+      msg = 'Revelação: ' + dreamer.name + ' sonhou com ' + G.Tech.DISC[id].name.toLowerCase() + '.';
+      S.events.push({ k: 'miracle', kind, x: Math.floor(dreamer.x), y: Math.floor(dreamer.y) });
+    } else if (kind === 'cura') {
       const h = healed, wasLabor = !!(h.labor && h.labor.hard && !h.labor.helped);
       h.needs.saude = Math.min(100, h.needs.saude + C.CURA_HEAL);
       h.dmg.raio = 0; h.dmg.parto = 0;
@@ -280,7 +335,7 @@
         o.fruit = Math.min(C.BUSH_MAX, o.fruit + C.CHUVA_FRUIT);
         fruits += o.fruit - before;
       }
-      const water = Math.min(C.CHUVA_WATER, C.WATER_CAP - S.stock.agua);
+      const water = Math.min(C.CHUVA_WATER, G.Tech.waterCap(S) - S.stock.agua);
       if (Math.hypot(S.camp.x - x, S.camp.y - y) <= C.CHUVA_R + 2) S.stock.agua += Math.max(0, water);
       God.align(S, 3);
       answer(S, 'fome sede', x, y, C.CHUVA_R);
@@ -294,8 +349,10 @@
       // lobo perto do raio: o raio é dele (e o trovão espanta a matilha)
       const wolf = G.Narr ? G.Narr.onRaio(S, x, y) : null;
       const hit = wolf ? null : S.people.find((p) => p.alive && !p.inTent && near(p, x, y, C.RAIO_R));
-      const o = wolf ? null : G.W.objAt(w, i);
+      const game = wolf || hit || !G.Fauna ? null : G.Fauna.onRaio(S, x, y);   // capivara: carne e couro
+      const o = wolf || game ? null : G.W.objAt(w, i);
       if (wolf) msg = wolf;
+      else if (game) msg = game;
       else if (hit) {
         hit.needs.saude -= C.RAIO_DAMAGE;
         hit.dmg.raio = (hit.dmg.raio || 0) + C.RAIO_DAMAGE;

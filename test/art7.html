@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><title>arte da Etapa 7</title>
+<style>body{margin:0;background:#262b44;color:#ead4aa;font:12px monospace} canvas{image-rendering:pixelated;display:block}</style></head>
+<body><canvas id="sheet"></canvas>
+<script src="../js/core.js"></script><script src="../js/config.js"></script><script src="../js/world.js"></script>
+<script src="../js/sim.js"></script><script src="../js/family.js"></script><script src="../js/life.js"></script><script src="../js/tech.js"></script><script src="../js/invencoes.js"></script>
+<script src="../js/obras.js"></script><script src="../js/fauna.js"></script><script src="../js/ai.js"></script>
+<script src="../js/god.js"></script><script src="../js/narrator.js"></script><script src="../js/save.js"></script>
+<script src="../js/art.js"></script>
+<script>
+// folha com as obras novas (4x) sobre a grama, e os ícones
+const A = G.Art; const S = A.build();
+const sh = document.getElementById('sheet'); sh.width = 1400; sh.height = 900;
+const x = sh.getContext('2d'); x.imageSmoothingEnabled = false;
+x.fillStyle = '#58a447'; x.fillRect(0, 0, 1400, 900);
+let px = 8, py = 8, rowH = 0;
+function put(img, s) { s = s || 4; if (px + img.width * s > 1392) { px = 8; py += rowH + 10; rowH = 0; } x.drawImage(img, px, py, img.width * s, img.height * s); px += img.width * s + 10; rowH = Math.max(rowH, img.height * s); }
+function nl() { px = 8; py += rowH + 12; rowH = 0; }
+for (let lv = 1; lv <= 3; lv++) { put(S.fireLv[lv].lit[0]); put(S.fireLv[lv].out); }
+put(S.bench.h); put(S.bench.v);
+nl();
+for (const k of [1, 2, 'oca', 'palafita', 'barro', 'pedra']) put(S.house[k]);
+nl();
+put(S.moquem); put(S.works2.moquem); put(S.jirau); put(S.works2.jirau); put(S.forno); put(S.works2.forno);
+nl();
+for (const t of ['armazem', 'marcenaria', 'tecelagem']) { put(S.shop[t][1]); put(S.shop[t][2]); }
+nl();
+for (const k of ['tabuas', 'fibra', 'mantas', 'redes', 'madeira', 'pedra']) put(S.item[k], 5);
+for (const n of ['tabuas', 'fibra', 'mantas', 'redes', 'armazem', 'marcenaria', 'tecelagem', 'caminho', 'oca', 'palafita', 'barro', 'casapedra', 'melhorar', 'barraca', 'fogo']) put(A.icon(n), 5);
+document.title = 'pronto';
+</script></body></html>
