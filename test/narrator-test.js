@@ -7,7 +7,7 @@
 const path = require('path');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 globalThis.G = {};
-for (const f of ['core', 'config', 'world', 'sim', 'family', 'life', 'tech', 'invencoes', 'obras', 'fauna', 'ai', 'god', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
+for (const f of ['core', 'config', 'world', 'sim', 'family', 'life', 'tech', 'invencoes', 'obras', 'fauna', 'bichos', 'campo', 'ai', 'god', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
 const { W, Sim, CFG: C, Family: F, God, Narr: N, Save, AI } = G;
 const Y = 60 * 1440, D = 1440;
 
@@ -37,8 +37,9 @@ function longRun(seed, kind, years) {
         if (e.k === 'narr' && e.on && N.EVENTS[e.ev]) starts.push({ t: S.t, k: e.ev });
         if (e.k === 'bite') {
           bitesAt.push(S.t);
-          if (N.safeXY(S, e.x, e.y)) unsafeBites++;
-          const p = S.people.find((q) => q.alive && Math.abs(q.x - e.x) < 1e-6 && Math.abs(q.y - e.y) < 1e-6);
+          if (N.safeXY(S, e.x, e.y) && (!e.sp || e.sp === 'onca')) unsafeBites++;   // a luz do fogo guarda de lobo e de onça (jacaré e porco-do-mato não ligam para o fogo)
+          // quem foi mordido: o evento diz (duas pessoas podem estar no mesmo ponto, e o bebê no colo fica no ponto de quem o carrega)
+          const p = e.pid ? S.people.find((q) => q.id === e.pid) : S.people.find((q) => q.alive && !q.carriedBy && Math.abs(q.x - e.x) < 1e-6 && Math.abs(q.y - e.y) < 1e-6);
           if (p && F.age(S, p) < 12) kidBites++;
         }
       }
@@ -331,7 +332,7 @@ Promise.all(half.map((part) => new Promise((res, rej) => {
   check('nada grande antes do primeiro inverno', all((r) => r.early === 0));
   check('nunca dois desastres grandes seguidos', all((r) => r.bigTwice === 0));
   check('respiro depois de uma perda', all((r) => r.noRest === 0));
-  check('ninguém mordido na luz do fogo, nenhuma criança mordida', all((r) => r.unsafeBites === 0 && r.kidBites === 0));
+  check('ninguém mordido na luz do fogo, nenhuma criança mordida', all((r) => r.unsafeBites === 0 && r.kidBites === 0), res.filter((r) => r.unsafeBites || r.kidBites).map((r) => r.kind + ' ' + r.seed + ': ' + r.unsafeBites + ' na luz, ' + r.kidBites + ' crianças').join(' · '));
   const eq = res.filter((r) => r.kind !== 'pacifico');
   check('sem tédio: depois do 1º ano, nunca mais de 15 dias sem acontecer nada (Equilibrado e Implacável)', eq.every((r) => r.gap1 <= 15), 'maior: ' + Math.max(...eq.map((r) => r.gap1)).toFixed(1) + ' d');
   check('Pacífico mais calmo, mas nunca mais de 20 dias parado', res.filter((r) => r.kind === 'pacifico').every((r) => r.gap1 <= 20));

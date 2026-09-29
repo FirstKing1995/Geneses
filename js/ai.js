@@ -8,24 +8,27 @@
   const RUN = 0, DONE = 1, FAIL = -1;
   const DONE_QUIET = 2;   // terminou, mas sem o "bom dia" (acordou de madrugada para beber, por exemplo)
 
-  const WORK = ['frutas', 'agua', 'madeira', 'pedra', 'pesca', 'caca', 'argila', 'construir', 'caminho', 'oficio', 'conservar', 'fogo'];
-  const VONT = { caminho: 'construir' };   // caminho usa a Vontade de Construir (Etapa 7)
+  const WORK = ['frutas', 'agua', 'madeira', 'pedra', 'pesca', 'caca', 'argila', 'construir', 'caminho', 'oficio', 'conservar', 'roca', 'criacao', 'cerca', 'fogo'];
+  const VONT = { caminho: 'construir', cerca: 'construir' };   // caminho e cerca usam a Vontade de Construir (Etapas 7 e 10)
   const WORK_SET = new Set(WORK);
   const SKILL_OF = { frutas: 'coleta', agua: 'coleta', madeira: 'coleta', pedra: 'coleta', pesca: 'pesca', caca: 'caca', argila: 'coleta',
-    construir: 'construcao', caminho: 'construcao', oficio: 'oficio', conservar: null, fogo: null };
+    construir: 'construcao', caminho: 'construcao', oficio: 'oficio', conservar: null, fogo: null, roca: 'plantio', criacao: 'criacao', cerca: 'construcao' };
   // reavaliadas a cada 20 min; alimentar o fogo não (é rápido, e largar no meio devolvia a lenha e recomeçava sem fim);
   // caçar e conservar também não (largar a caça no meio perdia a presa; a carga do moquém é curta)
   // caça, ofício e conservar não se reavaliam no meio: quem lasca segura a pedra na mão (o estoque parece vazio)
   // e largava a peça pela metade a cada reavaliação, sem nunca terminar
-  const REEVAL = new Set(WORK.filter((w) => w !== 'fogo' && w !== 'caca' && w !== 'conservar' && w !== 'oficio').concat(['vagar', 'brincar', 'aquecer', 'depositar', 'ouvir', 'festa']));
+  // roça e criação também não (a colheita no cesto, a ração na mão: cada tarefa é curta e termina sozinha)
+  const REEVAL = new Set(WORK.filter((w) => w !== 'fogo' && w !== 'caca' && w !== 'conservar' && w !== 'oficio' && w !== 'roca' && w !== 'criacao')
+    .concat(['vagar', 'brincar', 'aquecer', 'depositar', 'ouvir', 'festa']));
   const Fam = G.Family, Tech = G.Tech;
   AI.WORK = WORK;
   AI.LABEL = { frutas: 'Frutas', agua: 'Água', madeira: 'Madeira', pedra: 'Pedra', pesca: 'Pesca', caca: 'Caça', argila: 'Argila',
-    construir: 'Construir', caminho: 'Caminhos', oficio: 'Ofício', conservar: 'Conservar', fogo: 'Fogo' };
-  AI.SKILL_LABEL = { coleta: 'Coleta', pesca: 'Pesca', construcao: 'Construção', caca: 'Caça', oficio: 'Ofício' };
+    construir: 'Construir', caminho: 'Caminhos', oficio: 'Ofício', conservar: 'Conservar', fogo: 'Fogo', roca: 'Roça', criacao: 'Criação', cerca: 'Cercas' };
+  AI.SKILL_LABEL = { coleta: 'Coleta', pesca: 'Pesca', construcao: 'Construção', caca: 'Caça', oficio: 'Ofício', plantio: 'Plantio', criacao: 'Criação' };
   const RES_LABEL = { madeira: 'madeira', pedra: 'pedra', agua: 'água', frutas: 'frutas', peixe: 'peixe', carne: 'carne', couro: 'couro',
     argila: 'argila', defumado: 'defumado', seca: 'fruta seca', ferramentas: 'ferramentas', roupas: 'roupas',
-    tabuas: 'tábuas', fibra: 'fibra', mantas: 'mantas', redes: 'redes' };
+    tabuas: 'tábuas', fibra: 'fibra', mantas: 'mantas', redes: 'redes',
+    feijao: 'feijão', milho: 'milho', abobora: 'abóbora', mandioca: 'mandioca', ovos: 'ovos', leite: 'leite' };
   AI.RES_LABEL = RES_LABEL;
 
   const LINES = {
@@ -55,9 +58,9 @@
     brincar: ['Pega-pega!', 'Não me pega!', 'Achei uma pedra bonita!', 'Olha o que eu sei fazer!', 'Ha ha ha!'],
     parto: ['Tá vindo…', 'Respira…', 'Aguenta firme.'],
     lobos: ['Lobos!', 'Corre pro fogo!', 'Tem lobo aqui!'],
-    caca: ['Vou atrás das capivaras.', 'Hoje tem carne.', 'Silêncio… lá estão elas.'],
-    acertou: ['Peguei uma!', 'Na mosca!', 'Carne para todo mundo!'],
-    errou: ['Errei…', 'Quase!', 'Ela foi para a água.'],
+    caca: ['Hoje tem carne.', 'Silêncio… lá está.', 'Devagar, contra o vento.'],
+    acertou: ['Peguei!', 'Na mosca!', 'Carne para todo mundo!'],
+    errou: ['Errei…', 'Quase!', 'Fugiu!'],
     escapou: ['Escaparam todas.', 'Hoje não deu.'],
     oficio: ['Vou fazer ferramentas.', 'Deixa eu lascar essa pedra.', 'Vou costurar um couro.'],
     marcenaria: ['Vou tirar umas tábuas.', 'Essa madeira é boa.', 'Tábua reta, casa firme.'],
@@ -72,7 +75,20 @@
     chamaMusica: ['Quem quer ouvir a flauta?', 'Vem, que hoje tem música.', 'Senta aqui, que eu vou tocar.'],
     tambor: ['Tum, tum, tum!', 'Mais forte!', 'Dança, povo!', 'Ninguém fica parado!'],
     rede: ['Vou jogar a rede.', 'Hoje a rede vem cheia.'],
+    // Etapa 9: bichos e luta
+    investida: ['Ele vem aí!', 'Cuidado, vem pra cima!', 'Segura firme!'],
+    ferido: ['Acertei, mas fugiu!', 'Tá ferido!', 'Ainda não caiu!'],
+    venceu: ['Foi embora!', 'Pronto, passou.', 'Ninguém mexe com a gente.'],
+    acuada: ['Achei! Tá aqui!', 'Cerca ela!', 'Devagar… ela tá acuada.'],
+    espera: ['Espera os outros…', 'Devagar. Vamos juntos.', 'Ela tá aí dentro.'],
+    desiste: ['Sozinho não dá.', 'Ninguém veio… volto amanhã.'],
     arco: ['Daqui eu acerto.', 'Silêncio… mira…', 'Vou de arco hoje.'],
+    // Etapa 10: campo
+    roca: ['Vou para a roça.', 'Terra boa essa.', 'Cada cova, três sementes.'],
+    capina: ['Tirando o mato…', 'O mato cresce mais que a planta!', 'Enxada na mão.'],
+    colher: ['Olha que fartura!', 'A terra devolveu.', 'Colheita boa!'],
+    criacao: ['Vou ver os bichos.', 'Pi, pi, pi… vem!', 'Bicho bem tratado dá mais.'],
+    cerca: ['Vou fincar a cerca.', 'Estaca por estaca.', 'Aqui bicho não passa.'],
   };
   AI.LINES = LINES;
 
@@ -150,12 +166,21 @@
     if (c.k === 'obra') { for (const m of C.MATERIALS) S.stock[m] += c[m] || 0; }
     else if (c.k === 'caca') {
       S.stock.carne += c.carne; S.stock.couro += c.couro;
-      Sim.float(S, S.camp.x + 1, S.camp.y + 0.6, '+' + c.carne + ' carne +' + c.couro + ' couro');
+      Sim.float(S, S.camp.x + 1, S.camp.y + 0.6, '+' + c.carne + ' carne' + (c.couro ? ' +' + c.couro + ' couro' : ''));
+    } else if (c.k === 'cria') {
+      // do curral (Etapa 10): ovos, leite e lã
+      S.stock.ovos += c.ovos || 0; S.stock.leite += c.leite || 0;
+      S.stats.ovosGot += c.ovos || 0; S.stats.leiteGot += c.leite || 0; S.stats.laGot += c.fibra || 0;
+      const parts = [];
+      if (c.ovos) parts.push('+' + c.ovos + (c.ovos === 1 ? ' ovo' : ' ovos'));
+      if (c.leite) parts.push('+' + c.leite + ' leite');
+      if (c.fibra) parts.push('+' + c.fibra + ' lã');
+      Sim.float(S, S.camp.x + 1, S.camp.y + 0.6, parts.join(' '));
     } else if (c.k === 'agua') S.stock.agua = Math.min(Tech.waterCap(S), S.stock.agua + c.n);
     else S.stock[c.k] += c.n;
-    if (c.fibra) { S.stock.fibra += c.fibra; S.stats.fibraGot = (S.stats.fibraGot || 0) + c.fibra; }   // embira da casca (Etapa 7)
+    if (c.fibra) { S.stock.fibra += c.fibra; S.stats.fibraGot = (S.stats.fibraGot || 0) + c.fibra; }   // embira da casca (Etapa 7) e lã (Etapa 10)
     if (c.k === 'frutas' || c.k === 'peixe') { const got = S.stats.got || (S.stats.got = {}); got[c.k] = (got[c.k] || 0) + c.n; }   // missões do Ato 1
-    if (c.k !== 'obra' && c.k !== 'caca') Sim.float(S, S.camp.x + 1, S.camp.y + 0.6, '+' + c.n + ' ' + RES_LABEL[c.k] + (c.fibra ? ' +' + c.fibra + ' fibra' : ''));
+    if (c.k !== 'obra' && c.k !== 'caca' && c.k !== 'cria') Sim.float(S, S.camp.x + 1, S.camp.y + 0.6, '+' + c.n + ' ' + RES_LABEL[c.k] + (c.fibra ? ' +' + c.fibra + ' fibra' : ''));
     p.carry = null;
   }
   // devolve ao estoque o que a pessoa carregava para uma tarefa largada no meio
@@ -188,7 +213,8 @@
       }
       const tx = (idx % w.W) + 0.5, ty = ((idx / w.W) | 0) + 0.5;
       const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
-      const cost = C.COST[w.tile[idx]] * (w.slow[idx] ? 2 : 1) * (w.road ? C.ROAD_MULT[w.road[idx]] : 1);   // caminho e trilha andam mais
+      const cost = C.COST[w.tile[idx]] * (w.slow[idx] ? 2 : 1) * (w.road ? C.ROAD_MULT[w.road[idx]] : 1) *   // caminho e trilha andam mais
+        (w.fence && w.fence[idx] && !(w.road && w.road[idx] >= 2) ? 2 : 1);   // pular a cerca (Etapa 10; na porteira, não)
       const can = budget / cost;
       if (d > 1e-6) { if (Math.abs(dx) > Math.abs(dy)) p.dir = dx > 0 ? 2 : 3; else p.dir = dy > 0 ? 0 : 1; }
       if (d <= can) { p.x = tx; p.y = ty; budget -= d * cost; p.pathI++; p.walk += d; if (G.Obras) G.Obras.step(S, idx); }
@@ -328,8 +354,8 @@
       const wr = W.findNearest(w, here, (i) => (W.waterAdj(w, i) >= 0 ? 1 : 0), 90);
       if (S.stock.agua > 0) {
         const cr = W.findNearest(w, here, (i) => (Sim.isCamp(S, i) ? 1 : 0), 180);
-        // com lobos rondando, bebe do estoque, perto do fogo
-        if (cr && (!wr || cr.cost <= wr.cost + 3 || G.Narr.wolvesOut(S))) { a.src = 'estoque'; setPath(p, cr.path); return true; }
+        // com lobos ou onça rondando, bebe do estoque, perto do fogo
+        if (cr && (!wr || cr.cost <= wr.cost + 3 || G.Narr.beastsOut(S))) { a.src = 'estoque'; setPath(p, cr.path); return true; }
       }
       if (!wr) return false;
       a.src = 'fonte'; a.water = W.waterAdj(w, wr.idx); setPath(p, wr.path);
@@ -388,18 +414,29 @@
       if (n.fome >= 88) return DONE;
       if (a.src === 'estoque') {
         // o fresco primeiro (estraga logo); o conservado fica para quando faltar (o inverno)
-        const st = S.stock, fresh = st.peixe + st.carne;
-        if (fresh > 0 && litNearCamp(S)) {
+        const st = S.stock, fresh = st.peixe + st.carne, lit = litNearCamp(S), cm = Tech.cookMult(S);   // vasos (Etapa 8): cozido rende mais
+        const roca = rocaDish(st, lit);   // Etapa 10: da roça, o que estraga primeiro (sem fogo, só milho e abóbora)
+        if (st.leite > 0) {
+          st.leite--; n.fome += C.LEITE_FOOD; n.sede = Math.min(100, n.sede + C.LEITE_SEDE); a.next = a.t + 5; a.dish = 'leite'; Sim.addMem(S, p, 'tomouLeite');
+        }
+        else if (st.ovos > 0 && lit) { st.ovos--; n.fome += C.OVOS_FOOD * cm; a.next = a.t + 8; a.dish = 'ovos'; Sim.addMem(S, p, cm > 1 ? 'comeuCozido' : 'comeuQuente'); }
+        else if (fresh > 0 && lit) {
           const k = st.carne > st.peixe ? 'carne' : 'peixe';
-          const cm = Tech.cookMult(S);   // vasos (Etapa 8): cozido rende mais
           st[k]--; n.fome += (k === 'carne' ? C.CARNE_COOKED : C.FISH_COOKED) * cm; Sim.addMem(S, p, cm > 1 ? 'comeuCozido' : 'comeuQuente'); a.next = a.t + 25; a.hot = k;
         }
         else if (st.frutas > 0) { st.frutas--; n.fome += C.FRUIT_FOOD; a.next = a.t + 6; }
+        else if (roca) eatRoca(S, p, a, roca, lit, cm);
         else if (st.defumado > 0) { st.defumado--; n.fome += C.DEFUMADO_FOOD; a.next = a.t + 15; a.kept = 'defumado'; }
         else if (st.seca > 0) { st.seca--; n.fome += C.SECA_FOOD; a.next = a.t + 6; a.kept = 'seca'; }
         else if (fresh > 0) {
           const k = st.carne > st.peixe ? 'carne' : 'peixe';
           st[k]--; n.fome += k === 'carne' ? C.CARNE_RAW : C.FISH_RAW; Sim.addMem(S, p, k === 'carne' ? 'carneCrua' : 'comeuCru'); a.next = a.t + 12;
+        }
+        else if (!lit && S.ctx.fire && st.madeira > 0 && rocaDish(st, true)) {
+          // só sobrou feijão ou mandioca, que pedem fogo: acende a fogueira para cozinhar
+          const f = S.ctx.fire;
+          f.fuel = Math.max(f.fuel, 1); st.madeira--;
+          eatRoca(S, p, a, rocaDish(st, true), true, cm);
         }
         else {
           if (n.fome > 40) return DONE;
@@ -418,6 +455,20 @@
       return RUN;
     },
   };
+
+  // Etapa 10: o que vem da roça (o que estraga primeiro vai antes; cru, só milho e abóbora)
+  const ROCA_EAT = ['mandioca', 'abobora', 'milho', 'feijao'];
+  function rocaDish(st, lit) {
+    for (const k of ROCA_EAT) if (st[k] > 0 && (lit || C.ROCA[k].raw > 0)) return k;
+    return null;
+  }
+  function eatRoca(S, p, a, k, lit, cm) {
+    const d = C.ROCA[k];
+    S.stock[k]--;
+    p.needs.fome += lit ? d.food * cm : d.raw;
+    a.next = a.t + (lit ? 20 : 8); a.dish = k;
+    if (lit) Sim.addMem(S, p, cm > 1 ? 'comeuCozido' : 'comeuQuente');
+  }
 
   ACT.dormir = {
     start(S, p, a) {
@@ -830,8 +881,8 @@
       }
       a.t += dt;
       const n = p.needs, h = S.ck.hour;
-      if (!Nr.wolvesOut(S)) {
-        // os lobos foram embora: quem pegou no sono continua dormindo ali mesmo
+      if (!Nr.beastsOut(S)) {
+        // os lobos (ou a onça) foram embora: quem pegou no sono continua dormindo ali mesmo
         if (p.sleeping) { p.act = { type: 'dormir', stage: 'sleep', t: a.slept || 0, score: 50, byFire: a.src === 'fogo' }; return RUN; }
         return DONE;
       }
@@ -853,6 +904,7 @@
     },
   };
 
+  const danger = (S, i) => !!(G.Fauna && G.Fauna.dangerAt(S, i));
   function objOk(o, kind) {
     if (!o) return false;
     if (kind === 'madeira') return o.k === 'tree';
@@ -869,12 +921,16 @@
         if (p.carry && p.carry.n >= Fam.carryCap(S, p)) return false;
         const w = S.world;
         let test;
-        if (kind === 'madeira') test = (i) => W.adjObj(w, i, (o) => o.k === 'tree' && !o.res);
-        else if (kind === 'pedra') test = (i) => W.adjObj(w, i, (o) => o.k === 'rock' && o.ch > 0 && !o.res);
+        // Etapa 10: a árvore ou a pedra que faz de parede numa roça ou num curral cercados fica onde está
+        const gd = (kind === 'madeira' || kind === 'pedra') && G.Campo ? G.Campo.guarded(S) : null;
+        const free = (o) => !gd || !gd.size || !gd.has(o.y * w.W + o.x);
+        if (kind === 'madeira') test = (i) => W.adjObj(w, i, (o) => o.k === 'tree' && !o.res && free(o));
+        else if (kind === 'pedra') test = (i) => W.adjObj(w, i, (o) => o.k === 'rock' && o.ch > 0 && !o.res && free(o));
         else if (kind === 'frutas') test = (i) => W.adjObj(w, i, (o) => o.k === 'bush' && o.fruit > 0 && !o.res);
-        else if (kind === 'agua') test = (i) => (W.waterAdj(w, i) >= 0 ? 1 : 0);
-        else if (kind === 'argila') test = (i) => (W.waterAdj(w, i) >= 0 && !claimed(S, p, i) ? 1 : 0);   // barreiro: a beira d'água
-        else test = (i) => (W.waterAdj(w, i) >= 0 && W.waterCount8(w, i) >= 2 && !fishTaken(S, p, i) ? 1 : 0);
+        // Etapa 9: a margem onde um jacaré atacou fica marcada, e o povo evita trabalhar ali por um tempo
+        else if (kind === 'agua') test = (i) => (W.waterAdj(w, i) >= 0 && !danger(S, i) ? 1 : 0);
+        else if (kind === 'argila') test = (i) => (W.waterAdj(w, i) >= 0 && !claimed(S, p, i) && !danger(S, i) ? 1 : 0);   // barreiro: a beira d'água
+        else test = (i) => (W.waterAdj(w, i) >= 0 && W.waterCount8(w, i) >= 2 && !fishTaken(S, p, i) && !danger(S, i) ? 1 : 0);
         // procura o alvo mais perto do acampamento (trabalho perto de casa), depois caminha até ele
         const campI = S.camp.y * w.W + S.camp.x;
         // perto de casa primeiro; acabou pedra (ou árvore) por perto, vai mais longe (pedra não nasce de novo)
@@ -1085,6 +1141,13 @@
   // caça (lança): escolhe uma capivara, chega perto, arremessa; acertou, carneia e leva carne e couro.
   // Com o arco e flecha (Etapa 8), atira de longe, acerta mais e a flecha não espanta o bando
   const cacaR = (S) => (G.Inv ? G.Inv.cacaR(S) : C.CACA_R);
+  // a presa caiu: vai até ela para carnear
+  function toCut(S, p, a, e) {
+    const w = S.world, ex = Math.floor(e.x), ey = Math.floor(e.y);
+    route(S, p, (i) => { const x = i % w.W, y = (i / w.W) | 0; return Math.max(Math.abs(x - ex), Math.abs(y - ey)) <= 1 ? 1 : 0; }, 60);
+    a.stage = 'cut'; a.t = 0;
+    return RUN;
+  }
   function approach(S, p, e) {
     const w = S.world, ex = e.x, ey = e.y;
     const r = W.findNearest(w, tileOf(S, p), (i) => {
@@ -1106,16 +1169,18 @@
       if (!e) return false;
       a.prey = e.id; e.res = p.id; a.shots = 0;
       if (!approach(S, p, e)) { e.res = 0; return false; }
-      say(S, p, Tech.known(S, 'arco') && S.rng.next() < 0.5 ? 'arco' : 'caca', 0.4);
+      // Etapa 9: às vezes diz o bicho que vai caçar
+      if (S.rng.next() < 0.25) Sim.say(S, p, 'Vou atrás ' + C.BICHOS[e.sp || 'capivara'].art.replace(/^uma /, 'daquela ').replace(/^um /, 'daquele ') + '.');
+      else say(S, p, Tech.known(S, 'arco') && S.rng.next() < 0.5 ? 'arco' : 'caca', 0.4);
       return true;
     },
     run(S, p, a, dt) {
       const Fa = G.Fauna, e = Fa.get(S, a.prey);
       if (!e || e.gone) return a.stage === 'haul' ? ACT.depositar.run(S, p) : FAIL;
+      if ((a.stage === 'go' || a.stage === 'aim') && e.state === 'morta') return toCut(S, p, a, e);   // caiu (na luta, por exemplo)
       if (a.stage === 'go') {
         const d = Math.hypot(e.x - p.x, e.y - p.y);
         if (e.state !== 'morta' && d <= cacaR(S)) { a.stage = 'aim'; a.t = 0; p.path = null; face(p, Math.floor(e.x), Math.floor(e.y)); return RUN; }
-        if (e.state === 'morta') return FAIL;
         a.t += dt;
         // a presa anda: refaz o caminho de tempos em tempos
         if (!moving(p) || a.t - (a.repath || 0) >= 15) {
@@ -1135,13 +1200,19 @@
         S.events.push({ k: 'throw', x1: p.x, y1: p.y - 0.4, x2: e.x, y2: e.y, bow });
         const bando = Fa.alive(S).filter((o) => o !== e && o.h === e.h && Math.hypot(o.x - e.x, o.y - e.y) < 7);
         if (S.rng.next() < C.CACA_HIT + C.CACA_HIT_LVL * lvl(p, 'caca') + (G.Inv ? G.Inv.cacaHit(S) : 0)) {
-          if (bow) S.stats.arrowKills = (S.stats.arrowKills || 0) + 1;
-          Fa.kill(S, e);
-          for (const o of bando) Fa.scare(S, o, p.x, p.y);
-          say(S, p, 'acertou', 0.8, true);
-          const w = S.world, ex = Math.floor(e.x), ey = Math.floor(e.y);
-          route(S, p, (i) => { const x = i % w.W, y = (i / w.W) | 0; return Math.max(Math.abs(x - ex), Math.abs(y - ey)) <= 1 ? 1 : 0; }, 60);
-          a.stage = 'cut'; a.t = 0;
+          S.events.push({ k: 'hit', x: e.x, y: e.y });
+          const r = Fa.hit ? Fa.hit(S, e, p) : (Fa.kill(S, e), 'morto');   // bicho grande pede mais de um acerto
+          if (r === 'morto') {
+            if (bow) S.stats.arrowKills = (S.stats.arrowKills || 0) + 1;
+            for (const o of bando) Fa.scare(S, o, p.x, p.y);
+            say(S, p, 'acertou', 0.8, true);
+            return toCut(S, p, a, e);
+          }
+          if (r === 'investida') { say(S, p, 'investida', 1, true); a.t = 0; return RUN; }   // vem para cima: segura a mira
+          say(S, p, 'ferido', 0.8, true);
+          for (const o of bando) if (!bow) Fa.scare(S, o, p.x, p.y);
+          if (a.shots >= (G.Inv ? G.Inv.cacaShots(S) : C.CACA_SHOTS)) return DONE;
+          a.stage = 'go'; a.t = 0; a.repath = -99;
           return RUN;
         }
         Fa.scare(S, e, p.x, p.y);
@@ -1158,9 +1229,12 @@
         if (a.t < C.CACA_CUT_MIN) return RUN;
         Fa.remove(S, e);
         S.stats.hunted++;
-        if (!S.stats.firstHunt) { S.stats.firstHunt = true; Sim.chron(S, p.name + ' voltou da primeira caçada com uma capivara nas costas.'); }
-        const y = G.Inv ? G.Inv.cacaYield(S) : { carne: C.CACA_CARNE, couro: C.CACA_COURO };   // com a faca, carneia melhor
-        p.carry = { k: 'caca', carne: y.carne, couro: y.couro, n: y.carne + y.couro };
+        const sp = e.sp || 'capivara', hb = S.stats.huntedBy || (S.stats.huntedBy = {});
+        hb[sp] = (hb[sp] || 0) + 1; S.stats.lastHunt = sp;
+        if (!S.stats.firstHunt) { S.stats.firstHunt = true; Sim.chron(S, p.name + ' voltou da primeira caçada com ' + C.BICHOS[sp].art + ' nas costas.'); }
+        else if (hb[sp] === 1) { Sim.chron(S, p.name + ' caçou ' + C.BICHOS[sp].art + ' pela primeira vez.'); Sim.addMem(S, p, 'cacouNovo'); }   // Etapa 9: cada bicho novo entra na Crônica
+        const y = Fa.yieldOf ? Fa.yieldOf(S, sp) : G.Inv ? G.Inv.cacaYield(S) : { carne: C.CACA_CARNE, couro: C.CACA_COURO };   // com a faca, carneia melhor
+        p.carry = { k: 'caca', carne: y.carne, couro: y.couro, n: y.carne + y.couro, sp };
         a.stage = 'haul';
         return toCamp(S, p) ? RUN : FAIL;
       }
@@ -1173,6 +1247,64 @@
       const e = G.Fauna.get(S, a.prey);
       if (e && e.res === p.id) e.res = 0;
     },
+  };
+
+  // Etapa 9: defender. Quem tem lança (ou arco) corre para ajudar quem foi atacado: chega ao alcance e ataca de
+  // LUTA_MIN em LUTA_MIN minutos, até o bicho cair, fugir ou ir embora (ou a luta passar de 45 minutos)
+  ACT.defender = {
+    start(S, p, a) {
+      const B = G.Bichos;
+      if (!B || !a.tgt || B.over(S, a.tgt) || !B.armed(S, p)) return false;
+      a.stage = 'go'; a.t = 0; a.repath = -1;
+      return true;
+    },
+    run(S, p, a, dt) {
+      const B = G.Bichos, e = B.ent(S, a.tgt), hunt = !!a.tgt.hunt;
+      if (!e || B.over(S, a.tgt)) { say(S, p, 'venceu', 0.6, true); return DONE; }
+      a.t += dt;
+      // na caçada à onça, a caminhada até a toca é longa; na defesa, a luta é curta
+      if (a.t > (hunt ? 360 : 45) || !B.armed(S, p) || p.needs.saude < 25) return DONE;
+      const R = cacaR(S), d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d > R) {
+        a.stage = 'go';
+        if (!moving(p) || S.t >= a.repath) {
+          a.repath = S.t + (hunt && d > 8 ? 20 : 4);
+          const w = S.world, ex = e.x, ey = e.y;
+          const r = W.findNearest(w, tileOf(S, p), (i) => { const x = i % w.W + 0.5, y = ((i / w.W) | 0) + 0.5; return Math.hypot(x - ex, y - ey) <= R - 0.4 ? 1 : 0; }, hunt ? 240 : 80);
+          if (!r) return FAIL;
+          setPath(p, r.path.length ? r.path : null);
+        }
+        return RUN;
+      }
+      // chegou na toca: espera os outros (ninguém entra sozinho) e então acham a onça, que fica acuada (e brava)
+      if (hunt && e.state === 'toca') {
+        const near = S.people.filter((q) => q.alive && q.act && q.act.type === 'defender' && q.act.tgt && q.act.tgt.hunt && q.act.tgt.id === e.id &&
+          Math.hypot(q.x - e.x, q.y - e.y) <= R + 2).length;
+        if (near < 2) {
+          if (a.stage !== 'wait') { a.stage = 'wait'; a.waited = 0; p.path = null; face(p, Math.floor(e.x), Math.floor(e.y)); say(S, p, 'espera', 1, true); }
+          a.waited += dt;
+          if (a.waited > 90) { say(S, p, 'desiste', 1, true); return DONE; }   // os outros não vieram: sozinho, ninguém entra
+          return RUN;
+        }
+        G.Narr.corner(S, e, p); say(S, p, 'acuada', 1, true);
+      }
+      a.stage = 'aim'; p.path = null;
+      face(p, Math.floor(e.x), Math.floor(e.y));
+      a.aim = (a.aim || 0) + dt;
+      if (a.aim < C.LUTA_MIN) return RUN;
+      a.aim = 0;
+      B.strike(S, p, a.tgt, false);
+      return RUN;
+    },
+  };
+  AI.startDefend = function (S, p, tgt) {
+    if (p.act && (p.act.type === 'defender' || p.act.type === 'parto')) return false;
+    if (p.act) end(S, p, 0);
+    const a = { type: 'defender', score: 99, stage: 'go', t: 0, tgt };
+    p.sleeping = false;
+    if (!ACT.defender.start(S, p, a)) return false;
+    p.act = a; p.nextEval = S.t + 60;
+    return true;
   };
 
   // ofício (pedra lascada): no acampamento, lasca pedra e encaba ferramentas; com couro, costura roupas
@@ -1355,6 +1487,202 @@
     },
   };
 
+  // ---------- Etapa 10: roça, criação e cercas ----------
+  // para dentro da obra (a roça e o curral se trabalham por dentro)
+  function toInside(S, p, b) {
+    const w = S.world;
+    return route(S, p, (i) => { const x = i % w.W, y = (i / w.W) | 0; return x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h ? 1 : 0; }, 180, true);
+  }
+  const ROCA_MIN = { plant: 'ROCA_PLANT_MIN', weed: 'ROCA_WEED_MIN', harvest: 'ROCA_HARVEST_MIN' };
+  // o que cabe no cesto na volta da roça (colheita vai em cesto e em saco: o dobro)
+  const rocaCap = (S, p) => Fam.carryCap(S, p) * 2;
+  // a tarefa ainda faz sentido quando a pessoa chega?
+  function rocaStill(S, b, task, k) {
+    const Ca = G.Campo, f = Ca.farmOf(b);
+    if (task === 'plant') return f.st === 'vazia' && !Ca.plantWhy(S, k);
+    if (task === 'weed') return f.st === 'crescendo' && !!f.mato && !f.weeded;
+    if (task === 'harvest') return f.st === 'madura';
+    return f.pile > 0;
+  }
+  ACT.roca = {
+    start(S, p, a) {
+      if (p.carry || !G.Campo) return false;
+      const plan = G.Campo.rocaPlan(S, p);
+      if (!plan) return false;
+      a.b = plan.b.id; a.task = plan.kind; a.k = plan.k;
+      if (!toInside(S, p, plan.b)) return false;
+      if (a.task !== 'haul') G.Campo.reserve(S, plan.b, p);   // levar a colheita não reserva: vários levam juntos
+      a.stage = 'go';
+      return true;
+    },
+    run(S, p, a, dt) {
+      const Ca = G.Campo, b = Sim.building(S, a.b);
+      if (!b || !b.built) return FAIL;
+      if (a.stage === 'go') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        if (!rocaStill(S, b, a.task, a.k)) return DONE;   // outro fez antes: pensa de novo
+        face(p, b.x + 1, b.y + 1);
+        if (a.task === 'haul') { a.stage = 'load'; }
+        else {
+          a.stage = a.task; a.t = Ca.resume(b, a.task, a.k);
+          say(S, p, a.task === 'weed' ? 'capina' : a.task === 'harvest' ? 'colher' : 'roca', 0.3);
+        }
+      }
+      if (a.stage === 'plant' || a.stage === 'weed' || a.stage === 'harvest') {
+        if (!rocaStill(S, b, a.stage, a.k)) { a.t = 0; return DONE; }
+        a.t += dt * workSpeed(p, 'plantio', 'roca');
+        p.skills.plantio = (p.skills.plantio || 0) + dt / 60 * Fam.xpFactor(S, p);
+        if (a.t < C[ROCA_MIN[a.stage]]) return RUN;
+        a.t = 0;
+        if (a.stage === 'plant') { Ca.plant(S, b, a.k, p); return DONE; }
+        if (a.stage === 'weed') { Ca.weed(S, b); return DONE; }
+        Ca.harvest(S, b, p);
+        Ca.release(S, b.id, p, null);   // colhida: a roça fica livre para o próximo plantio enquanto a colheita vai ao estoque
+        a.stage = 'load';
+      }
+      if (a.stage === 'load') {
+        const got = Ca.takePile(S, b, rocaCap(S, p));
+        if (!got) return DONE;
+        p.carry = { k: got.k, n: got.n };
+        a.stage = 'haul';
+        return toCamp(S, p) ? RUN : FAIL;
+      }
+      if (a.stage === 'haul') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        deposit(S, p);
+        return DONE;
+      }
+      return RUN;
+    },
+    end(S, p, a) { if (G.Campo) G.Campo.release(S, a.b, p, a); },
+  };
+
+  // criação: recolhe ovos, leite e lã; leva ração no frio; abate quando o curral enche
+  const CRIA_MIN = { collect: 'COLLECT_MIN', feed: 'FEED_MIN', slaughter: 'ABATE_MIN' };
+  ACT.criacao = {
+    start(S, p, a) {
+      if (p.carry || !G.Campo) return false;
+      const Ca = G.Campo, plan = Ca.criaPlan(S, p);
+      if (!plan) return false;
+      a.b = plan.b.id; a.task = plan.kind;
+      if (a.task === 'feed') {
+        a.want = Math.max(1, Math.min(rocaCap(S, p), plan.n, Ca.racao(S)));
+        if (!toCamp(S, p)) return false;
+        a.stage = 'fetch';
+      } else {
+        if (!toInside(S, p, plan.b)) return false;
+        a.stage = 'go';
+      }
+      Ca.reserve(S, plan.b, p);
+      return true;
+    },
+    run(S, p, a, dt) {
+      const Ca = G.Campo, b = Sim.building(S, a.b);
+      if (!b || !b.built) return FAIL;
+      if (a.stage === 'fetch') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        const got = Ca.takeFeed(S, a.want);
+        if (!got.n) return FAIL;
+        p.carry = { k: 'racao', n: got.n, back: got.back };
+        if (!toInside(S, p, b)) return FAIL;
+        a.stage = 'go';
+        return RUN;
+      }
+      if (a.stage === 'go') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        a.stage = 'tend'; a.t = 0;
+        face(p, b.x + 1, b.y + 1);
+        say(S, p, 'criacao', 0.3);
+      }
+      if (a.stage === 'tend') {
+        a.t += dt * workSpeed(p, 'criacao', 'criacao');
+        p.skills.criacao = (p.skills.criacao || 0) + dt / 60 * Fam.xpFactor(S, p);
+        if (a.t < C[CRIA_MIN[a.task]]) return RUN;
+        if (a.task === 'feed') {
+          if (p.carry && p.carry.k === 'racao') { Ca.feedPen(S, b, p.carry.n); p.carry = null; }
+          return DONE;
+        }
+        const got = a.task === 'collect' ? Ca.collect(S, b, Fam.carryCap(S, p)) : Ca.slaughter(S, b, p);
+        if (!got) return DONE;
+        p.carry = got;
+        a.stage = 'haul';
+        return toCamp(S, p) ? RUN : FAIL;
+      }
+      if (a.stage === 'haul') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        deposit(S, p);
+        return DONE;
+      }
+      return RUN;
+    },
+    end(S, p, a) {
+      if (G.Campo) G.Campo.release(S, a.b, p);
+      if (p.carry && p.carry.k === 'racao') giveBack(S, p);
+    },
+  };
+
+  // cercas: finca a cerca marcada, passo a passo; cada passo leva uma vara de madeira do estoque
+  function nextFence(S, p, a, far) {
+    const w = S.world;
+    if (!(p.carry && p.carry.k === 'cerca' && p.carry.n > 0)) return false;
+    const r = W.findNearest(w, tileOf(S, p), (i) => (w.fenceJob[i] ? 1 : 0), far || 14);
+    if (!r) return false;
+    a.i = r.idx;
+    if (r.path.length) setPath(p, r.path); else p.path = null;
+    a.stage = 'go';
+    return true;
+  }
+  ACT.cerca = {
+    start(S, p, a) {
+      if (p.carry) return false;
+      const Ca = G.Campo, w = S.world;
+      if (!Ca || !Ca.fenceNeed(S)) return false;
+      const r = W.findNearest(w, tileOf(S, p), (i) => (w.fenceJob[i] ? 1 : 0), C.SEARCH_FAR);
+      if (!r) { S.campo.blockedUntil = S.t + 12 * 60; return false; }   // nada ao alcance: ninguém tenta por meio dia
+      a.wood = Math.max(1, Math.min(Fam.carryCap(S, p), S.stock.madeira, S.campo.fjobs.length * C.CERCA_WOOD));
+      if (!toCamp(S, p)) return false;
+      a.stage = 'fetch';
+      return true;
+    },
+    run(S, p, a, dt) {
+      const Ca = G.Campo;
+      if (a.stage === 'fetch') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        const n = Math.min(a.wood, S.stock.madeira);
+        if (n <= 0) return FAIL;
+        S.stock.madeira -= n;
+        p.carry = { k: 'cerca', n, back: { madeira: n } };
+        return nextFence(S, p, a, C.SEARCH_FAR) ? RUN : FAIL;
+      }
+      if (a.stage === 'go') {
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        a.stage = 'work';
+        faceIdx(S, p, a.i);
+        say(S, p, 'cerca', 0.2);
+      }
+      const j = Ca.fenceJobAt(S, a.i);
+      if (!j) return nextFence(S, p, a) ? RUN : DONE;
+      if (!(p.carry && p.carry.k === 'cerca' && p.carry.n > 0)) return DONE;
+      j.prog = (j.prog || 0) + dt * workSpeed(p, 'construcao', 'construir') / C.CERCA_WORK;
+      p.skills.construcao += dt / 60 * Fam.xpFactor(S, p) * 0.5;
+      a.worked = (a.worked || 0) + dt;
+      if (j.prog < 1) return RUN;
+      p.carry.n -= C.CERCA_WOOD; p.carry.back.madeira -= C.CERCA_WOOD;
+      if (p.carry.n <= 0) p.carry = null;
+      Ca.finishFence(S, j);
+      if (a.worked > 180) return DONE;   // três horas de cerca por vez
+      return nextFence(S, p, a) ? RUN : DONE;
+    },
+    end(S, p) { if (p.carry && p.carry.k === 'cerca') giveBack(S, p); },
+  };
+
   // ---------- notas ----------
   // com quem conversar: o mais perto; quem está bem procura primeiro quem está de luto (consolo).
   // Brigados se evitam até a raiva passar. Na lua cheia a conversa vai até as 23 h.
@@ -1432,6 +1760,18 @@
       }
       case 'construir': return ctx.jobDoable ? 1.35 : 0;
       case 'fogo': return ctx.fireNeedsFuel ? 1.6 : 0;
+      // Etapa 10: colheita madura não espera (passa do ponto); plantar na primavera rende o ano
+      case 'roca': {
+        const plan = G.Campo ? G.Campo.rocaPlan(S, null) : null;
+        if (!plan) return 0;
+        return plan.kind === 'harvest' ? 1.7 : plan.kind === 'haul' ? 1.4 : plan.kind === 'weed' ? 1.25 : S.ck.season === 0 ? 1.3 : 1.1;
+      }
+      case 'criacao': {
+        const plan = G.Campo ? G.Campo.criaPlan(S, null) : null;
+        if (!plan) return 0;
+        return plan.kind === 'feed' ? (plan.pri >= 3 ? 2 : 1.5) : plan.kind === 'collect' ? (plan.pri > 2 ? 1.35 : 1.15) : 1.1;
+      }
+      case 'cerca': return G.Campo && G.Campo.fenceNeed(S) ? 0.95 : 0;
     }
     return 1;
   }
@@ -1539,7 +1879,7 @@
     if (p.urgentCool > S.t || p.sleeping || a.type === 'chegar' || a.type === 'parto') return null;
     const n = p.needs, ctx = S.ctx;
     // lobo por perto e longe do fogo: corre antes de tudo
-    if (a.type !== 'fugir' && G.Narr.threat(S, p)) return 'fugir';
+    if (a.type !== 'fugir' && a.type !== 'defender' && G.Narr.threat(S, p)) return 'fugir';
     if (a.type === 'fugir') {
       // escondido: só sai para beber ou comer do estoque, e só se o estoque estiver na luz do fogo
       if (!G.Narr.safeXY(S, S.camp.x + 1, S.camp.y + 1)) return null;
@@ -1616,6 +1956,7 @@
     if (!p.touched || S.rng.next() < 0.2) { say(S, p, 'deus', 1, true); p.touched = true; }
   };
 
+  const DISH = { leite: 'Tomando leite', ovos: 'Comendo ovos cozidos', feijao: 'Comendo feijão', milho: 'Comendo milho', abobora: 'Comendo abóbora', mandioca: 'Comendo mandioca' };
   const DOING = {
     madeira: ['Indo cortar madeira', 'Cortando uma árvore', 'Levando madeira'],
     pedra: ['Indo atrás de pedra', 'Quebrando pedra', 'Levando pedra'],
@@ -1625,7 +1966,8 @@
     argila: ['Indo buscar argila', 'Cavando barro na beira d\'água', 'Levando argila'],
   };
   AI.describe = function (S, p) {
-    if (!p.alive) return 'Morreu ' + ({ frio: 'de frio', sede: 'de sede', fome: 'de fome', raio: 'atingido por um raio', parto: 'no parto', velhice: 'de velhice', lobos: 'no ataque dos lobos' }[p.cause] || '');
+    if (!p.alive) { const o = p.sex === 'F' ? 'a' : 'o'; return 'Morreu ' + ({ frio: 'de frio', sede: 'de sede', fome: 'de fome', raio: 'atingid' + o + ' por um raio', parto: 'no parto', velhice: 'de velhice', lobos: 'no ataque dos lobos',
+      onca: 'no ataque da onça', jacare: 'no ataque de um jacaré', bicho: 'atacad' + o + ' por um bicho' }[p.cause] || ''); }
     if (p.carriedBy) { const c = person(S, p.carriedBy); return c ? (c.sleeping ? 'Dormindo no colo de ' : 'No colo de ') + c.name : 'Sozinho'; }
     const a = p.act;
     if (!a) return 'Pensando no que fazer';
@@ -1635,14 +1977,31 @@
       case 'depositar': return 'Guardando no estoque';
       case 'beber': return st === 'go' ? 'Indo beber água' : 'Bebendo água';
       case 'comer': return st === 'go' ? 'Indo comer' : a.src === 'arbusto' ? 'Comendo frutas no pé' : a.hot === 'carne' ? 'Comendo carne assada' : a.hot ? 'Comendo peixe assado' :
-        a.kept === 'defumado' ? 'Comendo defumado' : a.kept === 'seca' ? 'Comendo fruta seca' : 'Comendo';
-      case 'caca': return st === 'aim' ? 'Mirando uma capivara' : st === 'cut' ? 'Carneando a capivara' : st === 'haul' ? 'Levando carne e couro' : 'Caçando capivara';
+        a.kept === 'defumado' ? 'Comendo defumado' : a.kept === 'seca' ? 'Comendo fruta seca' : a.dish ? DISH[a.dish] || 'Comendo' : 'Comendo';
+      case 'caca': { const e = G.Fauna.get(S, a.prey), nm = e ? C.BICHOS[e.sp || 'capivara'].name.toLowerCase() : 'bicho', um = e ? C.BICHOS[e.sp || 'capivara'].art : 'um bicho';
+        return st === 'aim' ? 'Mirando ' + um : st === 'cut' ? 'Carneando ' + um : st === 'haul' ? 'Levando carne' + (p.carry && p.carry.couro ? ' e couro' : '') : 'Caçando (' + nm + ')'; }
+      case 'defender': return st === 'aim' ? 'Enfrentando ' + (G.Bichos ? G.Bichos.theOf(S, a.tgt) : 'o bicho') : st === 'wait' ? 'Esperando os outros perto da toca' : a.tgt && a.tgt.hunt ? 'Atrás da onça, na mata' : 'Correndo para ajudar';
       case 'oficio': {
         const doing = { roupas: 'Costurando roupa de couro', ferramentas: 'Lascando ferramentas', tabuas: 'Serrando tábuas na marcenaria', mantas: 'Tecendo uma manta', redes: 'Tecendo uma rede' }[a.make] || 'No ofício';
         const going = { roupas: 'roupas', ferramentas: 'ferramentas', tabuas: 'tábuas', mantas: 'uma manta', redes: 'uma rede' }[a.make] || 'o ofício';
         return st === 'work' ? doing : 'Indo fazer ' + going;
       }
       case 'caminho': return st === 'work' ? 'Abrindo caminho' : st === 'fetch' ? 'Pegando pedra para o caminho' : 'Indo abrir caminho';
+      case 'roca': {
+        const b = Sim.building(S, a.b), f = b && b.farm, nm = (k) => (C.ROCA[k] ? C.ROCA[k].name.toLowerCase() : 'a roça');
+        if (st === 'plant') return 'Plantando ' + nm(a.k);
+        if (st === 'weed') return 'Capinando a roça' + (f && f.k ? ' de ' + nm(f.k) : '');
+        if (st === 'harvest') return 'Colhendo ' + (f && f.k ? nm(f.k) : 'a roça');
+        if (st === 'haul') return 'Levando ' + (p.carry ? RES_LABEL[p.carry.k] || p.carry.k : 'a colheita') + ' para o estoque';
+        return { plant: 'Indo plantar ' + nm(a.k), weed: 'Indo capinar a roça', harvest: 'Indo colher a roça', haul: 'Indo buscar a colheita' }[a.task] || 'Indo para a roça';
+      }
+      case 'criacao': {
+        if (st === 'fetch') return 'Pegando ração para os bichos';
+        if (st === 'haul') return p.carry && p.carry.k === 'caca' ? 'Levando carne do curral' : 'Levando ovos e leite para o estoque';
+        if (st === 'tend') return a.task === 'feed' ? 'Dando ração aos bichos' : a.task === 'slaughter' ? 'Abatendo um bicho da criação' : 'Recolhendo ovos e leite';
+        return a.task === 'feed' ? 'Levando ração ao curral' : 'Indo ao curral';
+      }
+      case 'cerca': return st === 'work' ? 'Fincando cerca' : st === 'fetch' ? 'Pegando varas para a cerca' : 'Indo fincar cerca';
       case 'conservar': {
         const b = Sim.building(S, a.b), moq = b && b.type === 'moquem';
         return st === 'fetch' ? 'Pegando comida para conservar' : st === 'load' ? (moq ? 'Armando o moquém' : 'Espalhando frutas no jirau') : moq ? 'Levando ao moquém' : 'Levando ao jirau';

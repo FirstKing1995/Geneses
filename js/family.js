@@ -28,7 +28,7 @@
   F.canWork = function (S, p, wk) {
     const st = F.stage(S, p);
     if (st === 'bebe' || p.labor || (p.rest && p.rest > S.t)) return false;   // resguardo depois do parto
-    if (st === 'crianca') return F.age(S, p) >= C.CHILD_HELP_AGE && (wk === 'frutas' || wk === 'agua');
+    if (st === 'crianca') return F.age(S, p) >= C.CHILD_HELP_AGE && (wk === 'frutas' || wk === 'agua' || wk === 'criacao');   // Etapa 10: ovos e ração
     return true;
   };
   F.carrying = (S, p) => S.people.some((b) => b.alive && b.carriedBy === p.id);
@@ -286,6 +286,95 @@
       }
     }
   }
+  // ---------- noites picantes (0.10, pedido do jogador) ----------
+  // Só entre adultos (18 anos ou mais), sem parentesco próximo entre ninguém do grupo e sem briga; tudo insinuado,
+  // nunca descrito. Desliga no menu (S.opts.picante === false) e não acontece com o jogo fechado.
+  const spicy = (S) => !(S.opts && S.opts.picante === false) && !S.safe;
+  F.spicy = spicy;
+  const grown = (S, p) => !!(p && p.alive && !p.carriedBy && F.age(S, p) >= 18);
+  function clean(S, list) {
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      if (F.closeKin(S, list[i], list[j]) || F.feuding(S, list[i], list[j])) return false;
+    }
+    return true;
+  }
+  function closer(S, list, afeto) {
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const x = list[i], y = list[j];
+      if (F.isPartner(x, y)) F.addAfeto(S, x, y, afeto);
+      x.rel[y.id] = (x.rel[y.id] || 0) + 1; y.rel[x.id] = (y.rel[x.id] || 0) + 1;
+    }
+  }
+  const houseName = (S, b) => { const d = b ? Sim().def(b) : null; return d ? (d.a === 'o' ? 'no ' : 'na ') + d.name.toLowerCase() : 'na barraca'; };
+  // noite a três: alguém com dois pares dormindo na mesma casa, e os dois se dão (conversam ou também são par)
+  function threesome(S) {
+    const byTent = new Map();
+    for (const p of S.people) if (grown(S, p) && p.sleeping && p.inTent && p.mood >= 45) { const l = byTent.get(p.inTent) || []; l.push(p); byTent.set(p.inTent, l); }
+    for (const [tid, list] of byTent) {
+      if (list.length < 3) continue;
+      for (const a of list) {
+        const ps = list.filter((q) => q !== a && F.isPartner(a, q) && F.afeto(a, q) >= C.AFETO_MIN);
+        if (ps.length < 2) continue;
+        const ok = [];
+        for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) {
+          const b = ps[i], c = ps[j];
+          const know = F.isPartner(b, c) || Math.min(b.rel[c.id] || 0, c.rel[b.id] || 0) >= C.TRIO_TALKS;
+          if (know && clean(S, [a, b, c])) ok.push([b, c]);
+        }
+        if (!ok.length || !S.rng.chance(C.TRIO_NIGHT)) continue;
+        const [b, c] = ok[S.rng.int(0, ok.length - 1)];
+        trio(S, tid, [a, b, c]);
+        break;   // uma por casa por noite
+      }
+    }
+  }
+  function trio(S, tid, three) {
+    const Sm = Sim(), st = S.stats;
+    st.trios = (st.trios || 0) + 1;
+    closer(S, three, 3);
+    for (const q of three) Sm.addMem(S, q, 'noiteTres');
+    const tb = Sm.building(S, tid), names = Sm.listNames(three), where = houseName(S, tb);
+    if (tb) S.events.push({ k: 'heart', x: tb.x + 1, y: tb.y, many: 3 });
+    if (st.trios === 1) Sm.chron(S, 'A primeira noite a três do povo: ' + names + ' passaram a noite juntos ' + where + ', e dormir foi o de menos.');
+    else if (S.rng.chance(0.35)) Sm.toast(S, S.rng.pick(['Noite animada ' + where + ': ' + names + '.', names + ' dividiram a mesma cama ' + where + ' esta noite.', 'De novo a três ' + where + ': ' + names + '. O povo já nem estranha.']), 'amor');
+  }
+  // depois da festa: um grupo de adultos ligados por pares (cada um tem par no grupo) estica a noite junto
+  F.afterParty = function (S, ps) {
+    if (!spicy(S)) return null;
+    const adults = ps.filter((q) => grown(S, q) && F.age(S, q) <= C.BOND_AGE_MAX && q.mood >= 50 && !q.labor && F.partners(S, q).length);
+    if (adults.length < C.PARTY_MANY_MIN) return null;
+    let best = [];
+    for (const seed of adults) {
+      const g = [seed];
+      for (let grew = true; grew && g.length < C.PARTY_MANY_MAX;) {
+        grew = false;
+        for (const q of adults) {
+          if (g.length >= C.PARTY_MANY_MAX || g.indexOf(q) >= 0) continue;
+          if (!g.some((m) => F.isPartner(m, q) && F.afeto(m, q) >= C.AFETO_MIN)) continue;
+          if (!clean(S, g.concat([q]))) continue;
+          g.push(q); grew = true;
+        }
+      }
+      if (g.length > best.length) best = g;
+    }
+    if (best.length < C.PARTY_MANY_MIN || !S.rng.chance(C.PARTY_MANY)) return null;
+    const Sm = Sim(), st = S.stats;
+    st.manyNights = (st.manyNights || 0) + 1;
+    closer(S, best, 2);
+    for (const q of best) Sm.addMem(S, q, 'noiteMuitos');
+    // a casa de quem tem mais lugar
+    let home = null;
+    for (const q of best) {
+      const b = S.buildings.find((x) => x.built && x.beds && x.beds.indexOf(q.id) >= 0);
+      if (b && (!home || (Sm.def(b).cap || 0) > (Sm.def(home).cap || 0))) home = b;
+    }
+    if (home) S.events.push({ k: 'heart', x: home.x + 1, y: home.y, many: best.length });
+    const names = Sm.listNames(best), where = home ? houseName(S, home) : 'na barraca maior';
+    if (st.manyNights === 1) Sm.chron(S, 'Depois da festa, ' + names + ' não foram cada um para a sua casa: a festa continuou ' + where + '. Foi a primeira noite de muitos do povo; no dia seguinte ninguém tocou no assunto, mas todo mundo sorria.');
+    else if (S.rng.chance(0.5)) Sm.toast(S, 'A festa continuou ' + where + ': ' + names + ' esticaram a noite juntos.', 'amor');
+    return best;
+  };
+
   function pregnancyHour(S) {
     const Sm = Sim();
     for (const w of S.people) {
@@ -491,7 +580,7 @@
   };
   F.hourly = function (S) {
     const h = Math.floor(S.ck.hour);
-    if (h === 23) nightTogether(S);
+    if (h === 23) { nightTogether(S); if (spicy(S)) threesome(S); }
     pregnancyHour(S);
     feedBabies(S);
   };

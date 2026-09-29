@@ -138,6 +138,8 @@ body[data-placing] #view { cursor: crosshair; }
 .menu-sound input[type=range] { width: 100%; min-width: 0; accent-color: var(--gold); }
 .menu-sound input[type=checkbox] { accent-color: var(--gold); width: 16px; height: 16px; }
 .menu-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.menu-chk { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
+.menu-chk input { accent-color: var(--gold); width: 16px; height: 16px; margin: 0; }
 .menu-head h2 { margin: 0; font-size: 16px; }
 
 .stock {
@@ -345,6 +347,7 @@ body[data-sheet="cronica"] .drawer { display: flex; }
 .toast.bad { box-shadow: inset 0 0 0 2px var(--blood); }
 .toast.chron { font-family: var(--story); font-style: italic; font-size: 17px; box-shadow: inset 0 0 0 2px var(--gold); }
 .toast.prayer { font-family: var(--story); font-style: italic; font-size: 17px; background: #3e2731; box-shadow: inset 0 0 0 2px var(--gold-hi); }
+.toast.amor { background: #3a2638; box-shadow: inset 0 0 0 2px #f6757a; }
 .toast.thanks { font-family: var(--story); font-style: italic; font-size: 17px; background: #2b3a2a; box-shadow: inset 0 0 0 2px #9be070; }
 .toast.out { opacity: 0; transition: opacity 0.5s; }
 @keyframes tin { from { transform: translateY(-6px); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -374,6 +377,33 @@ body[data-sheet="cronica"] .drawer { display: flex; }
 @keyframes fup { to { transform: translate(-50%, -34px); opacity: 0; } }
 
 #mobnav { display: none; }
+#mobnav button { position: relative; }
+#mobnav .badge { position: absolute; top: 3px; right: 6px; min-width: 16px; height: 16px; padding: 0 4px; background: var(--blood); color: #fff; font-size: 11px; line-height: 16px; text-align: center; border: 1px solid var(--night); }
+#mobnav button.nudge { animation: nudge 1.4s ease-in-out infinite; }
+@keyframes nudge { 50% { box-shadow: inset 0 0 0 2px var(--gold); color: var(--gold-hi); } }
+.obra-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.obra-head h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#p-obra { flex: 0 1 auto; min-height: 0; overflow: auto; display: grid; gap: 8px; align-content: start; }
+
+/* ---------- computador: os painéis abrem e fecham (como no celular), cada um no seu canto ---------- */
+@media (min-width: 821px) {
+  #p-vontades, #p-deus, #p-povo, #p-construir, #p-obra { display: none; }
+  body[data-open~="vontades"] #p-vontades, body[data-open~="deus"] #p-deus, body[data-open~="povo"] #p-povo, body[data-open~="obra"] #p-obra { display: grid; }
+  body[data-open~="construir"] #p-construir { display: block; }
+  #p-construir { bottom: calc(var(--bot) + 60px); }
+  .btn-cronica { display: none; }
+  #mobnav {
+    display: flex; position: absolute; right: var(--gut); bottom: var(--bot); gap: 2px; padding: 4px;
+    background: var(--panel); border: 2px solid var(--night); box-shadow: inset 0 0 0 2px var(--edge), 0 3px 0 rgba(0, 0, 0, 0.35);
+  }
+  #mobnav button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 10px; background: transparent; border: 2px solid transparent; cursor: pointer; font-size: 13px; }
+  #mobnav button:hover { border-color: var(--edge-2); }
+  #mobnav button.on { background: var(--panel-2); border-color: var(--gold); color: var(--gold-hi); }
+  #mobnav .badge { top: -6px; right: -4px; }
+  .menu { max-height: calc(100% - var(--top) - var(--bot) - 136px); }   /* o menu não cobre a barra dos painéis */
+  #mobnav { z-index: 7; }   /* a barra fica por cima da Crônica aberta */
+  .drawer { padding-bottom: calc(var(--bot) + 68px); }
+}
 
 #scr-over { display: grid; place-items: center; padding: var(--top) var(--gut) var(--bot); background: rgba(24, 20, 37, 0.8); }
 .over-card { width: min(520px, 100%); max-height: 100%; overflow: auto; display: grid; gap: 14px; padding: 22px; }
@@ -410,12 +440,12 @@ body[data-sheet="cronica"] .drawer { display: flex; }
   .btn-cronica { display: none; }
   .sheet { display: none; }
   #col-right { display: contents; }
-  #p-vontades, #p-povo, #p-construir, #p-deus, .drawer {
+  #p-vontades, #p-povo, #p-construir, #p-deus, #p-obra, .drawer {
     display: none;
     position: fixed; left: 0; right: 0; top: auto; bottom: var(--navh); width: auto; max-width: none; max-height: 58vh; transform: none;
     overflow: auto; padding: 14px var(--gut); z-index: 6;
   }
-  body[data-sheet="vontades"] #p-vontades, body[data-sheet="povo"] #p-povo, body[data-sheet="construir"] #p-construir, body[data-sheet="deus"] #p-deus { display: grid; }
+  body[data-sheet="vontades"] #p-vontades, body[data-sheet="povo"] #p-povo, body[data-sheet="construir"] #p-construir, body[data-sheet="deus"] #p-deus, body[data-sheet="obra"] #p-obra { display: grid; }
   body[data-sheet="cronica"] .drawer { display: flex; }
   .sheet-only { display: block; margin-bottom: 8px; }
   .builds { display: grid; grid-template-columns: 1fr 1fr; }
@@ -437,3 +467,12 @@ body[data-sheet="cronica"] .drawer { display: flex; }
   .title-card { margin-left: 0; }
   #scr-title { background: linear-gradient(180deg, rgba(24, 20, 37, 0.35) 0%, rgba(24, 20, 37, 0.9) 70%); align-items: flex-end; padding-bottom: calc(var(--bot) + 24px); }
 }
+/* Etapa 10: o que plantar na roça, quem mora no curral e o mascate */
+.crops { display: grid; gap: 6px; margin: 6px 0; }
+.crops .btn { gap: 6px; }
+.crops .btn .ico { width: 14px; height: 14px; }
+.crops .btn.on { box-shadow: inset 0 0 0 2px var(--gold), inset 0 -4px 0 rgba(0, 0, 0, 0.25); color: var(--gold-hi); }
+.herd { margin: 6px 0; }
+.herd .chip img { width: 16px; height: auto; vertical-align: -3px; image-rendering: pixelated; }
+.choice-people img.cria { grid-row: span 2; width: 40px; height: auto; image-rendering: pixelated; justify-self: center; }
+#choice-yes:disabled { opacity: 0.5; cursor: not-allowed; }

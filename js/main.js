@@ -35,7 +35,16 @@
     return d;
   }
   async function login(tab, f) {
-    const res = tab === 'criar' ? await Net.call('cadastrar', f) : await Net.call('entrar', { email: f.email, senha: f.senha });
+    let res;
+    if (tab === 'criar') {
+      res = await Net.call('cadastrar', f, 45000);
+      // a conta pode ter sido criada mesmo com a resposta perdida no caminho (o servidor acorda devagar), ou numa
+      // tentativa anterior: com os mesmos dados, entra direto
+      if (!res.ok && (res.offline || res.estranha || res.falha || /Já existe/.test(res.erro || ''))) {
+        const r2 = await Net.call('entrar', { email: f.email, senha: f.senha }, 45000);
+        if (r2.ok) res = r2;
+      }
+    } else res = await Net.call('entrar', { email: f.email, senha: f.senha }, 45000);
     if (res.ok) {
       Net.setSession({ token: res.token, nome: res.usuario.nome, email: res.usuario.email, mundo: res.mundo || null });
       UI.toast(tab === 'criar' ? 'Conta criada. Bem-vindo, ' + res.usuario.nome + '.' : 'Bem-vindo de volta, ' + res.usuario.nome + '.', 'good');
@@ -64,6 +73,7 @@
     }
     R.cam.zoom = 3;
     const net = Net.enabled(), s = session();
+    if (net) Net.warm();   // acorda o servidor enquanto o jogador olha a tela de título
     $('#acct-actions').hidden = !net || !!s;
     $('#btn-logout').hidden = !s;
     $('#btn-ranking').hidden = !net;
@@ -278,7 +288,7 @@
     if (b) {
       const d = C.BUILD[b.type];
       const costs = Object.entries(d.cost).map(([k, v]) => v + ' de ' + k);
-      UI.toast(d.name + (d.a === 'o' ? ' marcado' : ' marcada') + '. Precisa de ' + (costs.length > 1 ? costs.slice(0, -1).join(', ') + ' e ' + costs[costs.length - 1] : costs[0]) + '.', '');
+      UI.toast(d.name + (d.a === 'o' ? ' marcado' : ' marcada') + '. ' + (costs.length ? 'Precisa de ' + (costs.length > 1 ? costs.slice(0, -1).join(', ') + ' e ' + costs[costs.length - 1] : costs[0]) + '.' : 'Só pede trabalho: o povo lavra a terra.'), '');
       if (!S.vontades.construir) UI.toast('Construir está proibido nas Vontades. Ninguém vai trabalhar na obra.', 'warn');
     }
     cancelPlacing();
@@ -314,10 +324,22 @@
   // ---------- caminhos (Etapa 7): arrastar pelo chão marca os passos; o povo abre com a Vontade de Construir ----------
   function startRoad() {
     if (mode !== 'game' || !S) return;
-    if (roading) { stopRoad(); return; }
-    cancelPlacing(); cancelCasting();
+    if (roading && !roading.fence) { stopRoad(); return; }
+    cancelPlacing(); cancelCasting(); stopRoad(true);
     roading = { lv: 2, stroke: null };
     document.body.dataset.placing = 'caminho';
+    roadHint();
+    if (UI.isMobile()) UI.sheet('');
+    UI.update(0, true);
+  }
+  // cercas (Etapa 10): o mesmo pincel dos caminhos
+  function startFence() {
+    if (mode !== 'game' || !S) return;
+    if (!G.Tech.known(S, 'cerca')) { UI.toast('Cerca: vem com a descoberta da cerca (' + G.Campo.DEF.cerca.learn + ').', ''); return; }
+    if (roading && roading.fence) { stopRoad(); return; }
+    cancelPlacing(); cancelCasting(); stopRoad(true);
+    roading = { lv: 1, stroke: null, fence: true };
+    document.body.dataset.placing = 'cerca';
     roadHint();
     if (UI.isMobile()) UI.sheet('');
     UI.update(0, true);
@@ -326,6 +348,18 @@
     const hint = $('#place-hint');
     hint.hidden = false;
     const lv = roading.lv;
+    if (roading.fence) {
+      hint.innerHTML = `<span>${UI.isMobile() ? 'Arraste com um dedo para marcar a cerca; com dois, mexe o mapa.' : 'Arraste pelo chão para marcar a cerca (o botão direito mexe o mapa).'} Feche a volta toda: árvore, pedra e água também servem de parede.</span>
+      <span class="modes">
+        <button class="btn btn-small${lv === 1 ? ' on' : ''}" data-rlv="1" title="Cerca de vara: 1 madeira por passo. Em cima de caminho vira porteira.">Cercar</button>
+        <button class="btn btn-small${lv === 0 ? ' on' : ''}" data-rlv="0" title="Desmancha a cerca marcada ou feita.">Desfazer</button>
+      </span>
+      <button class="btn btn-small" id="place-cancel">Pronto</button>`;
+      hint.querySelectorAll('[data-rlv]').forEach((b) => { b.onclick = () => { roading.lv = +b.dataset.rlv; roadHint(); }; });
+      $('#place-cancel').onclick = () => stopRoad();
+      positionHint();
+      return;
+    }
     hint.innerHTML = `<span>${UI.isMobile() ? 'Arraste com um dedo para marcar; com dois, mexe o mapa.' : 'Arraste pelo chão para marcar o caminho (o botão direito mexe o mapa).'}</span>
       <span class="modes">
         <button class="btn btn-small${lv === 2 ? ' on' : ''}" data-rlv="2" title="Terra batida: só trabalho. Anda-se 30% mais rápido.">Terra</button>
@@ -351,6 +385,14 @@
     const st = roading && roading.stroke;
     if (!st || i < 0 || st.seen.has(i)) return;
     st.seen.add(i);
+    if (roading.fence) {
+      const K = G.Campo;
+      if (roading.lv === 0) { if (K.markFence(S, i, false)) st.removed++; return; }
+      if (K.markFence(S, i, true)) { st.marked++; return; }
+      const why = K.fenceWhy(S, i);
+      if (why) st.why = why; else st.had = true;   // já tinha cerca aqui
+      return;
+    }
     if (roading.lv === 0) { if (G.Obras.markRoad(S, i, 0)) st.removed++; return; }
     if (G.Obras.markRoad(S, i, roading.lv)) { st.marked++; return; }
     const why = G.Obras.roadWhy(S, i);
@@ -392,6 +434,7 @@
     if (discard && st.pending) { roading.stroke = null; return; }
     if (st.pending) paintRoad(st.last);
     roading.stroke = null;
+    if (roading.fence) { fenceDone(st); return; }
     if (st.marked) UI.toast(st.marked + (st.marked === 1 ? ' passo de caminho marcado' : ' passos de caminho marcados') + (roading.lv === 3 ? ', de pedra (1 pedra cada)' : '') + '. O povo abre com a Vontade de Construir.', '');
     else if (st.removed) UI.toast(st.removed + (st.removed === 1 ? ' passo desfeito.' : ' passos desfeitos.'), '');
     else if (st.why) UI.toast(st.why + '.', 'warn');
@@ -399,9 +442,34 @@
     if (st.marked && !S.vontades.construir) UI.toast('Construir está proibido nas Vontades. Ninguém vai abrir o caminho.', 'warn');
     UI.update(0, true);
   }
+  // fim de um traço de cerca: quanto marcou e se a volta da roça (ou do curral) fecha quando a cerca ficar pronta
+  function fenceDone(st) {
+    const K = G.Campo;
+    if (st.marked) UI.toast(st.marked + (st.marked === 1 ? ' passo de cerca marcado' : ' passos de cerca marcados') + ' (1 madeira cada). O povo finca com a Vontade de Construir.', '');
+    else if (st.removed) UI.toast(st.removed + (st.removed === 1 ? ' passo de cerca desfeito.' : ' passos de cerca desfeitos.'), '');
+    else if (st.why) UI.toast(st.why + '.', 'warn');
+    else if (st.had && roading.lv) UI.toast('Aí já tem cerca.', '');
+    if (st.marked && !S.vontades.construir) UI.toast('Construir está proibido nas Vontades. Ninguém vai fincar a cerca.', 'warn');
+    if (st.marked) {
+      const near = S.buildings.filter((b) => (b.type === 'roca' || b.type === 'curral') && b.built && !K.enclosed(S, b));
+      const closes = near.find((b) => !K.enclPlanned(S, b).open);
+      if (closes) UI.toast('Com essa cerca pronta, ' + (closes.type === 'roca' ? 'a roça fica fechada' : 'o curral fica fechado') + '.', 'good');
+      else if (near.length) {
+        const w = S.world, lx = st.last % w.W, ly = (st.last / w.W) | 0;
+        const b = near.find((q) => Math.hypot(q.x + 1.5 - lx, q.y + 1.5 - ly) < 14);
+        if (b) UI.toast('A cerca ainda não fecha a volta ' + (b.type === 'roca' ? 'da roça' : 'do curral') + ': bicho entra pela brecha. Árvore, pedra e água contam como parede.', 'warn');
+      }
+    }
+    UI.update(0, true);
+  }
   // o passo debaixo do mouse
   function brushAt(i) {
     if (!roading) return;
+    if (roading.fence) {
+      const w = S.world, has = i >= 0 && !!(w.fence[i] || w.fenceJob[i]);
+      R.overlay.brush = { tiles: [], lv: roading.lv, fence: true, hover: i, hoverOk: roading.lv === 0 ? has : i >= 0 && !has && !G.Campo.fenceWhy(S, i) };
+      return;
+    }
     const why = i >= 0 ? G.Obras.roadWhy(S, i) : 'fora';
     R.overlay.brush = { tiles: [], lv: roading.lv, hover: i, hoverOk: roading.lv === 0 ? i >= 0 && !!(S.world.road[i] >= 2 || S.world.roadJob[i]) : !why };
   }
@@ -516,7 +584,8 @@
         const d = Math.hypot(e.x * TS - w.x, e.y * TS - 4 - w.y);
         if (d < Math.max(12, 18 / R.scale()) && d < ed) { ed = d; ent = e; }
       }
-      if (ent && ent.k === 'lobo') { UI.toast('Lobo. Um Raio (R) perto dele abate um e espanta a matilha. Quem fica na luz do fogo aceso está a salvo.', 'warn'); return; }
+      if (ent && ent.k === 'lobo') { UI.toast('Lobo. Um Raio (R) perto dele abate um e espanta a matilha. Quem fica na luz do fogo aceso está a salvo. Com lança na mão, o povo revida.', 'warn'); return; }
+      if (ent && ent.k === 'onca') { UI.toast(G.Bichos.oncaInfo, 'warn'); return; }
       if (ent) {
         const g = S.narr.groups[ent.gid];
         if (g && g.state === 'esperando') { askChoice(g.id); return; }
@@ -524,20 +593,26 @@
         return;
       }
     }
-    // capivara
+    // bichos de criação (Etapa 10)
+    if (S.campo && S.campo.bichos.length) {
+      let an = null, ad = 1e9;
+      for (const a of S.campo.bichos) {
+        const d = Math.hypot(a.x * TS - w.x, a.y * TS - 3 - w.y);
+        if (d < Math.max(9, 14 / R.scale()) && d < ad) { ad = d; an = a; }
+      }
+      if (an) { UI.toast(G.Campo.info(S, an), ''); return; }
+    }
+    // bichos (Etapa 9: cada um com o seu jeito; o jacaré, se estiver n'água, é tocado onde aparecem os olhos)
     if (S.fauna) {
       let cap = null, cd = 1e9;
       for (const e of S.fauna.ents) {
-        if (e.gone || !Sim.isSeen(S, Math.floor(e.x), Math.floor(e.y))) continue;
-        const d = Math.hypot(e.x * TS - w.x, e.y * TS - 3 - w.y);
-        if (d < Math.max(10, 16 / R.scale()) && d < cd) { cd = d; cap = e; }
+        if (e.gone || e.hidden || !Sim.isSeen(S, Math.floor(e.x), Math.floor(e.y))) continue;
+        const wet = e.sp === 'jacare' && e.inWater && e.wx !== undefined, ex = wet ? e.wx : e.x, ey = wet ? e.wy : e.y;
+        const big = e.sp === 'anta' || e.sp === 'jacare' ? 4 : 0;
+        const d = Math.hypot(ex * TS - w.x, ey * TS - 3 - w.y);
+        if (d < Math.max(10 + big, 16 / R.scale()) && d < cd) { cd = d; cap = e; }
       }
-      if (cap) {
-        UI.toast(cap.state === 'morta' ? 'Uma capivara abatida. Quem caçou vai carnear e levar carne e couro ao estoque.' :
-          G.Tech.known(S, 'lanca') ? 'Capivara. Com Caça nas Vontades, quem tem lança traz 8 de carne e 2 de couro.' :
-            'Capivara pastando na beira d\'água. Quando o povo descobrir a lança, vira carne e couro.', '');
-        return;
-      }
+      if (cap) { UI.toast(G.Bichos.info(S, cap), cap.sp === 'jacare' || cap.state === 'investida' ? 'warn' : ''); return; }
     }
     const tx = Math.floor(w.x / TS), ty = Math.floor(w.y / TS);
     const bid = S.world.bgrid[ty * S.world.W + tx];
@@ -566,17 +641,23 @@
     else if (k === 'u') startCasting('chuva');
     else if (k === 'e') startCasting('cura');
     else if (k === 'v') startCasting('revelacao');
-    else if (k === 'm' || k === 'j' || k === 'o' || k === 'g' || k === 'k' || k === 'l') {
-      const t = { m: 'moquem', j: 'jirau', o: 'forno', g: 'armazem', k: 'marcenaria', l: 'tecelagem' }[k];
+    else if (k === 'm' || k === 'j' || k === 'o' || k === 'g' || k === 'k' || k === 'l' || k === 'h' || k === 'y') {
+      const t = { m: 'moquem', j: 'jirau', o: 'forno', g: 'armazem', k: 'marcenaria', l: 'tecelagem', h: 'roca', y: 'curral' }[k];
       if (G.Tech.buildOpen(S, t)) startPlacing(t);
       else { const d = C.BUILD[t], why = d.need && !G.Tech.known(S, d.need) ? 'vem com ' + G.Tech.DISC[d.need].name.toLowerCase() : G.Obras.openWhy(S, t); UI.toast(d.name + ': ' + why + '.', ''); }
     }
     else if (k === 'p') startRoad();
+    else if (k === 'x') startFence();
     else if (k === 'i') { if ($('#modal-disc').hidden) UI.disc(); else $('#modal-disc').hidden = true; }
     else if (k === 't') { if ($('#modal-tree').hidden) UI.tree(); else $('#modal-tree').hidden = true; }
     else if (k === 'n' && G.Audio) { const on = G.Audio.toggle(); if (UI.syncSound) UI.syncSound(); UI.toast(on ? 'Som ligado.' : 'Som desligado.', ''); }
     else if (k === 'c') UI.sheet(document.body.dataset.sheet === 'cronica' ? '' : 'cronica');
-    else if (k === 'escape') { if (!$('#menu').hidden) $('#menu').hidden = true; else if (placing) cancelPlacing(); else if (casting) cancelCasting(); else if (roading) stopRoad(); else { UI.select(0, 0); UI.sheet(''); } }
+    else if (k === 'escape') {
+      if (!$('#menu').hidden) $('#menu').hidden = true; else if (placing) cancelPlacing(); else if (casting) cancelCasting(); else if (roading) stopRoad();
+      else if (UI.sel && (UI.sel.person || UI.sel.building)) UI.select(0, 0);
+      else if (document.body.dataset.sheet) UI.sheet('');
+      else UI.closeAll();   // no computador: fecha os painéis abertos
+    }
     else if (k === '+' || k === '=') { const i = ZOOMS.indexOf(snapZoom(R.cam.zoom)); R.cam.zoom = ZOOMS[Math.min(ZOOMS.length - 1, i + 1)]; }
     else if (k === '-') { const i = ZOOMS.indexOf(snapZoom(R.cam.zoom)); R.cam.zoom = ZOOMS[Math.max(0, i - 1)]; }
     else if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].indexOf(k) >= 0) {
@@ -632,7 +713,9 @@
     UI.init({
       place: startPlacing,
       road: startRoad,
-      roading: () => !!roading,
+      roading: () => !!(roading && !roading.fence),
+      fence: startFence,
+      fencing: () => !!(roading && roading.fence),
       cast: startCasting,
       casting: () => casting,
       speed: setSpeed,
@@ -647,6 +730,7 @@
       // lobos à vista: o tempo volta para 1x (dá tempo de agir)
       alarm: () => { if (speed > 1) setSpeed(1); },
       era: showEra,
+      panels: () => positionHint(),
       birth: (pid) => {
         if (!S || S.safe || mode !== 'game') return;
         const baby = S.people.find((q) => q.id === pid);
@@ -671,8 +755,8 @@
 
     $('#btn-new').addEventListener('click', () => { setMode('site'); newSiteWorld(); });
     $('#btn-continue').addEventListener('click', continueGame);
-    $('#btn-login').addEventListener('click', () => UI.acct('entrar', login));
-    $('#btn-signup').addEventListener('click', () => UI.acct('criar', login));
+    $('#btn-login').addEventListener('click', () => { Net.warm(); UI.acct('entrar', login); });
+    $('#btn-signup').addEventListener('click', () => { Net.warm(); UI.acct('criar', login); });
     $('#btn-logout').addEventListener('click', logout);
     $('#btn-ranking').addEventListener('click', openRanking);
     $('#btn-reroll').addEventListener('click', newSiteWorld);
@@ -700,7 +784,7 @@
     G.debug = {
       get S() { return S; }, get mode() { return mode; },
       advance(days) { if (S) { Sim.advance(S, days * C.DAY_MIN); UI.update(0, true); } },
-      setSpeed, startPlacing, startCasting, startRoad, stopRoad, placeAt: (tx, ty) => placeAt((tx + 0.5) * TS, (ty + 0.5) * TS),
+      setSpeed, startPlacing, startCasting, startRoad, startFence, stopRoad, placeAt: (tx, ty) => placeAt((tx + 0.5) * TS, (ty + 0.5) * TS),
       castAt: (kind, tx, ty) => { startCasting(kind); if (casting) castAt((tx + 0.5) * TS, (ty + 0.5) * TS); },
       select: (pid) => UI.select(pid, 0, true), cam: R.cam, save: () => save(true),
     };

@@ -21,9 +21,9 @@
       story: (n) => n + ' trançou folhas e cipó e fez o primeiro cesto: agora cada viagem rende mais.',
       hint: 'Cada viagem agora traz metade a mais. Com fibra, dá para construir a tecelagem.' },
     lanca: { name: 'Lança', icon: 'lanca', learn: 'trabalhando a madeira e enfrentando lobos',
-      gives: 'Libera a Caça: capivaras dão carne e couro. Quem tem lança na mão sofre menos com os lobos.',
+      gives: 'Libera a Caça: os bichos da mata, do campo e da beira d\'água dão carne e couro. Com lança na mão, o povo enfrenta lobo e onça.',
       story: (n) => n + ' prendeu uma lasca na ponta de uma vara: nasceu a lança, e com ela a caça.',
-      hint: 'Suba Caça nas Vontades: capivara dá carne e couro para roupas.' },
+      hint: 'Suba Caça nas Vontades: cada bicho dá carne, e quase todos dão couro para roupas.' },
     anzol: { name: 'Anzol', icon: 'anzol', learn: 'pescando',
       gives: 'Com ferramenta, o peixe fisga 50% mais.',
       story: (n) => n + ' entalhou um osso em gancho: com o anzol, o peixe não escapa mais tão fácil.',
@@ -47,14 +47,17 @@
     ceramica: { 'agua:work': 1, 'argila:work': 1 },
   };
   // trabalhos que usam ferramenta (e a gastam)
-  const TOOL_WORK = { madeira: 'work', pedra: 'work', construir: 'build', caca: 'aim', argila: 'work', pesca: 'work' };
+  const TOOL_WORK = { madeira: 'work', pedra: 'work', construir: 'build', caca: 'aim', argila: 'work', pesca: 'work', roca: 'weed' };   // capinar gasta a enxada (Etapa 10)
   // trabalhos novos: quando abrem
-  T.WORK_NEED = { oficio: 'pedra', caca: 'lanca', conservar: 'conserva', argila: 'ceramica' };
-  // comida: quanto sustenta cada porção
-  T.FOOD = ['peixe', 'carne', 'frutas', 'defumado', 'seca'];
-  // com os vasos (Etapa 8), peixe e carne cozidos rendem mais
-  T.foodValue = (k, S) => ({ peixe: C.FISH_COOKED, carne: C.CARNE_COOKED, frutas: C.FRUIT_FOOD, defumado: C.DEFUMADO_FOOD, seca: C.SECA_FOOD }[k] || 0) *
-    ((k === 'peixe' || k === 'carne') && S ? T.cookMult(S) : 1);
+  T.WORK_NEED = { oficio: 'pedra', caca: 'lanca', conservar: 'conserva', argila: 'ceramica', roca: 'roca', criacao: 'criacao', cerca: 'cerca' };
+  // comida: quanto sustenta cada porção (Etapa 10: o que vem da roça e da criação)
+  T.FOOD = ['peixe', 'carne', 'frutas', 'defumado', 'seca', 'feijao', 'milho', 'abobora', 'mandioca', 'ovos', 'leite'];
+  const FOOD_V = () => ({ peixe: C.FISH_COOKED, carne: C.CARNE_COOKED, frutas: C.FRUIT_FOOD, defumado: C.DEFUMADO_FOOD, seca: C.SECA_FOOD,
+    feijao: C.ROCA.feijao.food, milho: C.ROCA.milho.food, abobora: C.ROCA.abobora.food, mandioca: C.ROCA.mandioca.food, ovos: C.OVOS_FOOD, leite: C.LEITE_FOOD });
+  let foodV = null;
+  // o que vai ao fogo no vaso (Etapa 8: cozido rende mais)
+  T.COOKED = { peixe: 1, carne: 1, feijao: 1, milho: 1, abobora: 1, mandioca: 1, ovos: 1 };
+  T.foodValue = (k, S) => ((foodV || (foodV = FOOD_V()))[k] || 0) * (T.COOKED[k] && S ? T.cookMult(S) : 1);
   T.cookMult = (S) => (G.Inv ? G.Inv.cookMult(S) : 1);
 
   // ---------- estado ----------
@@ -94,7 +97,7 @@
     }
     return null;
   };
-  T.need = (id) => C.DISC_NEED[id] || (C.INV_NEED && C.INV_NEED[id]);
+  T.need = (id) => C.DISC_NEED[id] || (C.INV_NEED && C.INV_NEED[id]) || (C.CAMPO_NEED && C.CAMPO_NEED[id]);
   T.progress = (S, id) => (S.tech && S.tech.known[id] ? 1 : Math.min(1, ((S.tech && S.tech.prat[id]) || 0) / T.need(id)));
   T.workOpen = (S, wk) => !T.WORK_NEED[wk] || T.known(S, T.WORK_NEED[wk]);
   T.buildOpen = (S, type) => { const d = C.BUILD[type]; return !!d && (!d.need || T.known(S, d.need)) && !(G.Obras && G.Obras.openWhy(S, type)); };
@@ -107,6 +110,7 @@
       if (T.known(S, 'pedra')) T.useTool(S, p, dt, a.type === 'pesca' ? C.TOOL_WEAR_FISH_H : C.TOOL_WEAR_H);
     }
     if (G.Inv) G.Inv.onWork(S, p, a, dt);   // as invenções (Etapa 8) aprendem com o próprio trabalho
+    if (G.Campo) G.Campo.onWork(S, p, a, dt);   // e as descobertas do campo (Etapa 10)
     const open = T.open(S);
     if (!open) return;
     const w = TEACH[open][key];
@@ -158,8 +162,8 @@
 
   // ---------- Revelação (milagre) ----------
   // o que ela entrega: a que o jogador escolheu na janela das Descobertas (se já dá), senão a próxima da trilha,
-  // senão a invenção mais adiantada (Etapa 8). Só vale o que o povo já começou a entender.
-  const openAny = (S, id) => !!id && (T.open(S) === id || !!(G.Inv && G.Inv.isOpen(S, id)));
+  // senão a invenção mais adiantada (Etapa 8), senão a do campo (Etapa 10). Só vale o que o povo já começou a entender.
+  const openAny = (S, id) => !!id && (T.open(S) === id || !!(G.Inv && G.Inv.isOpen(S, id)) || !!(G.Campo && G.Campo.isOpen(S, id)));
   T.revealable = (S, id) => openAny(S, id) && T.progress(S, id) >= C.REVELACAO_MIN;
   T.revealTarget = function (S) {
     if (!S.tech) return null;
@@ -167,13 +171,15 @@
     if (T.revealable(S, aim)) return aim;
     const open = T.open(S);
     if (T.revealable(S, open)) return open;
-    return G.Inv ? G.Inv.best(S) : null;
+    const inv = G.Inv ? G.Inv.best(S) : null, cam = G.Campo ? G.Campo.best(S) : null;
+    if (inv && cam) return T.progress(S, cam) > T.progress(S, inv) ? cam : inv;
+    return inv || cam;
   };
   T.canReveal = function (S) {
     if (T.revealTarget(S)) return '';
-    const cands = [T.open(S)].concat(G.Inv ? G.Inv.openList(S) : []).filter(Boolean);
+    const cands = [T.open(S)].concat(G.Inv ? G.Inv.openList(S) : [], G.Campo ? G.Campo.openList(S) : []).filter(Boolean);
     if (!cands.length) {
-      const all = T.count(S) >= T.ORDER.length && (!G.Inv || G.Inv.count(S) >= G.Inv.ORDER.length);
+      const all = T.count(S) >= T.ORDER.length && (!G.Inv || G.Inv.count(S) >= G.Inv.ORDER.length) && (!G.Campo || G.Campo.count(S) >= G.Campo.ORDER.length);
       if (all) return 'O povo já sabe tudo o que esta era ensina.';
       return S.stats.firstFire ? 'Ainda não há o que revelar.' : 'Ainda não há o que revelar: falta a primeira fogueira.';
     }
@@ -183,7 +189,9 @@
   T.reveal = function (S, p) {
     const id = T.revealTarget(S);
     if (!id) return null;
-    if (G.Inv && G.Inv.DEF[id]) G.Inv.invent(S, id, p, 'revelacao'); else T.discover(S, id, p, 'revelacao');
+    if (G.Inv && G.Inv.DEF[id]) G.Inv.invent(S, id, p, 'revelacao');
+    else if (G.Campo && G.Campo.DEF[id]) G.Campo.invent(S, id, p, 'revelacao');
+    else T.discover(S, id, p, 'revelacao');
     S.tech.aim = null;
     return id;
   };
@@ -210,7 +218,7 @@
   // bônus de velocidade no trabalho: a ferramenta de pedra e, na Etapa 8, o machado, a corda e a faca
   T.speed = function (S, p, wk) {
     let s = 1;
-    if (T.hasTool(S, p) && (wk === 'madeira' || wk === 'pedra' || wk === 'construir' || wk === 'argila' || wk === 'caca'))
+    if (T.hasTool(S, p) && (wk === 'madeira' || wk === 'pedra' || wk === 'construir' || wk === 'argila' || wk === 'caca' || wk === 'roca'))
       s = wk === 'madeira' && T.known(S, 'machado') ? C.MACHADO_BONUS : C.TOOL_BONUS;
     if (wk === 'construir' && T.known(S, 'corda')) s *= C.CORDA_BUILD;
     if (wk === 'oficio' && T.known(S, 'faca')) s *= C.FACA_OFICIO;

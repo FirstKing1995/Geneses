@@ -30,26 +30,49 @@
     try { if (s) st.setItem(SK, JSON.stringify(s)); else st.removeItem(SK); } catch (e) { /* sem acesso */ }
   };
 
-  Net.call = async function (action, data, timeoutMs) {
-    const url = Net.url();
-    if (!url) return { ok: false, erro: 'Servidor não configurado.' };
+  // Uma ida ao servidor. O Apps Script parado há um tempo acorda devagar (a primeira resposta pode levar 10 a 30 s),
+  // então o tempo limite é folgado e, nas ações que podem se repetir sem estrago, uma falha de rede, uma resposta
+  // estranha ou um erro passageiro do servidor (trava ocupada, planilha lenta) tenta mais uma vez.
+  const AGAIN = { hora: 1, entrar: 1, carregar: 1, ranking: 1, salvar: 1 };
+  async function once(url, action, data, timeoutMs) {
     const body = JSON.stringify(Object.assign({ action }, data || {}));
     const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = setTimeout(() => { if (ctl) ctl.abort(); }, timeoutMs || 20000);
+    let late = false;
+    const timer = setTimeout(() => { late = true; if (ctl) ctl.abort(); }, timeoutMs || 30000);
     const t0 = Date.now();
     try {
       const r = await fetch(url, { method: 'POST', body, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow', signal: ctl ? ctl.signal : undefined });
       const txt = await r.text();
       let js;
-      try { js = JSON.parse(txt); } catch (e) { return { ok: false, erro: 'O servidor respondeu algo inesperado. Confira o endereço do Apps Script.' }; }
+      try { js = JSON.parse(txt); } catch (e) { return { ok: false, erro: 'O servidor respondeu algo inesperado. Tente de novo em alguns segundos; se continuar, confira o endereço do Apps Script.', estranha: true }; }
       if (js && typeof js.now === 'number') Net.offset = js.now - Math.round((t0 + Date.now()) / 2);
       if (js && js.ok === false && js.sessao === false) Net.setSession(null);
+      warmAt = Date.now();
       return js;
     } catch (e) {
+      if (late) return { ok: false, erro: 'O servidor demorou demais para responder (depois de um tempo parado, ele acorda devagar). Tente de novo em alguns segundos.', lenta: true, offline: true };
       return { ok: false, erro: 'Sem conexão com o servidor. O jogo segue salvando neste aparelho.', offline: true };
     } finally {
       clearTimeout(timer);
     }
+  }
+  const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  Net.call = async function (action, data, timeoutMs) {
+    const url = Net.url();
+    if (!url) return { ok: false, erro: 'Servidor não configurado.' };
+    let res = await once(url, action, data, timeoutMs);
+    if (!res.ok && AGAIN[action] && ((res.offline && !res.lenta) || res.estranha || res.falha)) {
+      await wait(1500);
+      res = await once(url, action, data, timeoutMs);
+    }
+    return res;
+  };
+  // acorda o servidor antes da hora (ao abrir a tela de título ou a janela da conta): a primeira resposta é a lenta
+  let warmAt = 0;
+  Net.warm = function () {
+    if (!Net.enabled() || Date.now() - warmAt < 4 * 60 * 1000) return;
+    warmAt = Date.now();
+    once(Net.url(), 'hora', {}, 45000).then((r) => { if (!r.ok) warmAt = 0; });
   };
 
   // envio sem esperar resposta (ao fechar a aba)

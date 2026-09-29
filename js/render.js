@@ -283,7 +283,8 @@
       return;
     }
     if (e.k === 'heart') {
-      for (let i = 0; i < 3; i++) spawn({ x: e.x * TS + 6 + (Math.random() - 0.5) * 10, y: e.y * TS - 2 - i * 5, vx: (Math.random() - 0.5) * 4, vy: -6 - Math.random() * 4, g: 0, life: 2.4 + i * 0.3, spr: 'heart' });
+      const nh = e.many ? Math.min(12, 3 + e.many * 2) : 3;   // noite a três ou de muitos: mais corações
+      for (let i = 0; i < nh; i++) spawn({ x: e.x * TS + 6 + (Math.random() - 0.5) * (e.many ? 22 : 10), y: e.y * TS - 2 - (i % 4) * 5, vx: (Math.random() - 0.5) * (e.many ? 8 : 4), vy: -6 - Math.random() * 4, g: 0, life: 2.4 + (i % 4) * 0.3 + (e.many ? 0.8 : 0), spr: 'heart' });
       return;
     }
     if (e.k === 'miracle') {
@@ -315,6 +316,23 @@
       flocks.push({ t0: performance.now(), fromLeft, birds: Array.from({ length: n }, (_, i) => ({ dx: -i * 18 * dpr - Math.random() * 10 * dpr, dy: (Math.random() - 0.5) * 50 * dpr, k: i % 3, ph: Math.random() * 6 })), y0 });
     } else if (e.k === 'fight') {
       for (let i = 0; i < 8; i++) spawn({ x: e.x * TS + (Math.random() - 0.5) * 8, y: e.y * TS - 12, vx: (Math.random() - 0.5) * 24, vy: -8 - Math.random() * 10, g: 20, life: 0.8, col: Math.random() < 0.6 ? '#e43b44' : '#feae34' });
+    } else if (e.k === 'hit') {
+      // acerto: lasca branca e um respingo
+      for (let i = 0; i < 7; i++) spawn({ x: e.x * TS + (Math.random() - 0.5) * 6, y: e.y * TS - 4 + (Math.random() - 0.5) * 4, vx: (Math.random() - 0.5) * 30, vy: -10 - Math.random() * 14, g: 55, life: 0.5, col: Math.random() < 0.5 ? '#ffffff' : '#e43b44' });
+    } else if (e.k === 'beast') {
+      // investida: poeira levantando
+      for (let i = 0; i < 8; i++) spawn({ x: e.x * TS + (Math.random() - 0.5) * 10, y: e.y * TS + 2, vx: (Math.random() - 0.5) * 20, vy: -6 - Math.random() * 8, g: 10, life: 0.9, col: 'rgba(200,170,120,0.8)' });
+    } else if (e.k === 'birdsUp') {
+      // revoada: umas penas escuras
+      for (let i = 0; i < 3; i++) spawn({ x: e.x * TS + (Math.random() - 0.5) * 6, y: e.y * TS - 6, vx: (Math.random() - 0.5) * 12, vy: -4 - Math.random() * 6, g: 12, life: 1.1, col: '#3e3034' });
+    } else if (e.k === 'harvest') {
+      // Etapa 10: colheita (grãos e folhas pulando) · praga (gafanhotos) · bicho levado do curral (penas)
+      const col = { milho: '#fee761', abobora: '#f77622', feijao: '#c9a068', mandioca: '#c28569', algodao: '#ffffff' }[e.crop] || '#fee761';
+      for (let i = 0; i < 14; i++) spawn({ x: e.x * TS + (Math.random() - 0.5) * 36, y: e.y * TS + (Math.random() - 0.5) * 30, vx: (Math.random() - 0.5) * 10, vy: -10 - Math.random() * 12, g: 18, life: 1 + Math.random() * 0.6, col: Math.random() < 0.6 ? col : '#63c74d' });
+    } else if (e.k === 'praga') {
+      for (let i = 0; i < 40; i++) spawn({ x: e.x * TS + (Math.random() - 0.5) * 50, y: e.y * TS + (Math.random() - 0.5) * 44 - 6, vx: (Math.random() - 0.5) * 30, vy: (Math.random() - 0.5) * 14, g: 0, life: 1.5 + Math.random() * 2, col: Math.random() < 0.5 ? '#9be070' : '#265c42' });
+    } else if (e.k === 'penLoss') {
+      for (let i = 0; i < 8; i++) spawn({ x: e.x * TS + (Math.random() - 0.5) * 12, y: e.y * TS - 4, vx: (Math.random() - 0.5) * 16, vy: -6 - Math.random() * 8, g: 8, life: 1.6, col: Math.random() < 0.6 ? '#f2eee4' : '#c8bfae' });
     } else if (e.k === 'bite') {
       // mordida: respingo vermelho e um risco branco
       for (let i = 0; i < 10; i++) spawn({ x: e.x * TS + (Math.random() - 0.5) * 6, y: e.y * TS - 4 + (Math.random() - 0.5) * 6, vx: (Math.random() - 0.5) * 30, vy: -12 - Math.random() * 16, g: 60, life: 0.7, col: Math.random() < 0.7 ? '#e43b44' : '#ffffff' });
@@ -424,8 +442,9 @@
     if (S) { drawCamp(S); drawGround(S, tx0, ty0, tx1, ty1); }
     if (S && S.god) drawAuras(S, now);
     // lista ordenada por y
-    const list = [];
+    const list = [], fence = S ? w.fence : null;
     for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+      if (fence && fence[ty * w.W + tx]) list.push({ y: ty * TS + 13, fe: ty * w.W + tx });   // cercas (Etapa 10)
       const oi = w.objGrid[ty * w.W + tx];
       if (oi < 0) continue;
       const o = w.objs[oi];
@@ -435,6 +454,9 @@
     if (S) {
       for (const b of S.buildings) {
         if (b.x + b.w < tx0 || b.x > tx1 || b.y + b.h < ty0 || b.y > ty1) continue;
+        // Etapa 10: a roça em três fileiras de plantas (quem anda no meio fica entre elas); o curral com a cerca de trás e a da frente
+        if (b.type === 'roca' && b.built) { for (let r = 0; r < 3; r++) list.push({ y: (b.y + r + 1) * TS - 2, b, row: r }); if (!G.Sim.jobOf(b)) continue; }
+        if (b.type === 'curral') { list.push({ y: b.y * TS + 1, b, part: 'back' }); list.push({ y: (b.y + b.h) * TS - 1, b, part: 'front' }); continue; }
         list.push({ y: (b.y + b.h) * TS - 1, b });
       }
       for (const p of S.people) {
@@ -442,12 +464,19 @@
         const x = U.lerp(p.px, p.x, alpha), y = U.lerp(p.py, p.y, alpha);
         list.push({ y: y * TS + 4, p, x, y });
       }
-      // capivaras: só onde o povo já viu
+      // bichos: só onde o povo já viu (a paca de dia fica na toca)
       if (S.fauna) for (const e of S.fauna.ents) {
-        if (e.gone || !G.Sim.isSeen(S, Math.floor(e.x), Math.floor(e.y))) continue;
+        if (e.gone || e.hidden || !G.Sim.isSeen(S, Math.floor(e.x), Math.floor(e.y))) continue;
         const x = U.lerp(e.px, e.x, alpha), y = U.lerp(e.py, e.y, alpha);
         if (x < tx0 - 1 || x > tx1 + 1 || y < ty0 - 1 || y > ty1 + 1) continue;
         list.push({ y: y * TS + 3, c: e, x, y });
+      }
+      // bichos de criação (Etapa 10)
+      if (S.campo) for (const a of S.campo.bichos) {
+        if (!G.Sim.isSeen(S, Math.floor(a.x), Math.floor(a.y))) continue;
+        const x = U.lerp(a.px, a.x, alpha), y = U.lerp(a.py, a.y, alpha);
+        if (x < tx0 - 1 || x > tx1 + 1 || y < ty0 - 1 || y > ty1 + 1) continue;
+        list.push({ y: y * TS + 3, cr: a, x, y });
       }
       // lobos e viajantes: só onde o povo já viu (na névoa, só os uivos)
       if (S.narr) for (const e of S.narr.ents) {
@@ -461,9 +490,11 @@
     const snow = season === 3;
     for (const it of list) {
       if (it.o) drawObj(it.o, season, snow, sc < 1);
-      else if (it.b) drawBuilding(S, it.b, now);
+      else if (it.b) drawBuilding(S, it.b, now, it.row, it.part);
       else if (it.e) drawEnt(S, it.e, it.x, it.y, now);
-      else if (it.c) drawCapi(it.c, it.x, it.y);
+      else if (it.c) drawBicho(it.c, it.x, it.y, now);
+      else if (it.fe !== undefined) drawFence(S, it.fe, snow);
+      else if (it.cr) drawCria(S, it.cr, it.x, it.y);
       else drawPerson(S, it.p, it.x, it.y, now);
     }
     if (spears.length) drawSpears(now);
@@ -496,7 +527,7 @@
     // noite
     if (S) {
       drawLight(S, now);
-      if (S.narr && S.narr.ents.length) drawEyes(S, alpha);
+      if ((S.narr && S.narr.ents.length) || S.fauna) drawEyes(S, alpha);
       drawWeather(S, dt);
       drawSky(S, now);
     }
@@ -687,6 +718,28 @@
       blit(S2.bench.h, bx + 2, by - 7); blit(S2.bench.h, bx + 2, by + 19);
       blit(S2.bench.v, bx - 9, by + 4); blit(S2.bench.v, bx + 20, by + 4);
     }
+    // Etapa 10: a terra da roça (com o mato e a palha da última colheita), o chão do curral e as cercas marcadas
+    const season = S.ck.season;
+    for (const b of S.buildings) {
+      if ((b.type !== 'roca' && b.type !== 'curral') || b.x + b.w < tx0 - 1 || b.x > tx1 + 1 || b.y + b.h < ty0 - 1 || b.y > ty1 + 1) continue;
+      const bx = b.x * TS, by = b.y * TS, al = b.built ? undefined : 0.45, lv = b.lv || 1;
+      if (b.type === 'curral') { blit(A.curral(Math.min(2, lv), 'ground'), bx, by - 12, al); continue; }
+      blit(A.rocaSoil(season === 3 ? 'snow' : lv >= 2 ? 'rich' : 'warm'), bx, by, al);
+      const f = b.farm;
+      if (!f || !b.built) continue;
+      if (f.st === 'crescendo' && f.mato && !f.weeded) blit(A.rocaWeeds(), bx, by);
+      else if (f.st === 'vazia' && f.last && S.t - f.last.t < 8 * C.DAY_MIN && season !== 3) blit(A.rocaStubble(f.last.k === 'algodao'), bx, by);
+    }
+    const fj = S.campo && S.campo.fjobs;
+    if (fj && fj.length) for (const j of fj) {
+      const x = j.i % S.world.W, y = (j.i / S.world.W) | 0;
+      if (x < tx0 || x > tx1 || y < ty0 || y > ty1) continue;
+      // estaca fincada e o barbante marcando
+      rect(x * TS + 2, y * TS + 7, TS - 4, 1, 'rgba(234,212,170,0.75)');
+      rect(x * TS + 7, y * TS + 3, 2, 9, 'rgba(154,94,66,0.85)');
+      rect(x * TS + 7, y * TS + 3, 2, 1, 'rgba(254,174,52,0.9)');
+      if (j.prog > 0) rect(x * TS + 2, y * TS + TS - 3, (TS - 4) * Math.min(1, j.prog), 2, '#63c74d');
+    }
     const w = S.world, jobs = S.obras && S.obras.jobs;
     if (!jobs || !jobs.length) return;
     for (const j of jobs) {
@@ -707,10 +760,16 @@
   }
   // a figura da obra no nível dela (Etapa 7): casas, oficinas, armazém
   function houseImg(d) { const S2 = A.spr; return d.lv >= 3 && d.kind ? S2.house[d.kind] : S2.house[d.lv >= 2 ? 2 : 1]; }
-  function drawBuilding(S, b, now) {
+  function drawBuilding(S, b, now, row, part) {
     const S2 = A.spr, bx = b.x * TS, by = b.y * TS;
     const ghost = !b.built, d = G.Sim.def(b), lv = d.lv || 1;
-    if (b.type === 'fogueira') {
+    if (b.type === 'roca') {
+      // Etapa 10: uma fileira das plantas (a terra fica no chão, em drawGround); a entrada sem fileira só desenha a obra
+      if (row !== undefined) { drawRocaRow(S, b, row); return; }
+    } else if (b.type === 'curral') {
+      blit(A.curral(Math.min(2, lv), part === 'back' ? 'back' : 'front'), bx, by - 12, ghost ? 0.45 : undefined);
+      if (part === 'back') return;
+    } else if (b.type === 'fogueira') {
       const lit = b.built && b.fuel > 0, F = S2.fireLv[Math.min(3, lv)];
       const img = lit ? F.lit[Math.floor(now / 140) % 3] : F.out;
       blit(img, bx, by - 2, ghost ? 0.45 : undefined);
@@ -758,6 +817,44 @@
     }
   }
 
+  // Etapa 10: as plantas de uma fileira da roça, e a colheita no chão esperando quem leve
+  function drawRocaRow(S, b, r) {
+    const f = b.farm, bx = b.x * TS, by = b.y * TS;
+    if (!f) return;
+    if (f.k && (f.st === 'crescendo' || f.st === 'madura')) {
+      const stage = f.st === 'madura' ? 3 : f.grow < 0.1 ? 0 : f.grow < 0.45 ? 1 : 2;
+      blit(A.rocaRow(f.k, stage, r), bx, by + r * TS - 14);
+    }
+    if (r === 2 && f.pile > 0) {
+      const it = A.spr.item[f.pileK] || A.spr.item.milho, n = Math.min(4, Math.ceil(f.pile / 15));
+      for (let i = 0; i < n; i++) blit(it, bx + 34 + (i % 2) * 6, by + 40 - Math.floor(i / 2) * 4);
+    }
+  }
+  // cerca: o mourão e as varas até os vizinhos (a porteira, em cima do caminho, com tábuas claras e sem mourão no meio)
+  function drawFence(S, i, snow) {
+    const w = S.world, f = w.fence, x = i % w.W, y = (i / w.W) | 0, road = w.road;
+    const gateAt = (j) => !!(road && road[j] >= 2);
+    const e = x + 1 < w.W && f[i + 1], s = y + 1 < w.H && f[i + w.W], g = gateAt(i);
+    const lone = !e && !s && !(x > 0 && f[i - 1]) && !(y > 0 && f[i - w.W]);
+    const m = (e ? 1 : 0) | (s ? 2 : 0) | (e && (g || gateAt(i + 1)) ? 4 : 0) | (s && (g || gateAt(i + w.W)) ? 8 : 0) | (g ? 0 : 16) | (snow ? 32 : 0) | (lone ? 64 : 0);
+    blit(A.fence(m), x * TS, y * TS - 10);
+  }
+  // bichos de criação: de lado; pintinho nos primeiros dias; galo, carneiro e boi têm a figura deles
+  function criaKey(S, a) {
+    if (a.sp === 'galinha') return S.t - (a.born || 0) < 10 * C.DAY_MIN ? 'pinto' : a.sex === 'M' ? 'galo' : 'galinha';
+    if (a.sp === 'ovelha') return a.sex === 'M' ? 'carneiro' : 'ovelha';
+    if (a.sp === 'gado') return a.sex === 'M' ? 'boi' : 'vaca';
+    return a.sp;
+  }
+  function drawCria(S, a, x, y) {
+    const key = criaKey(S, a), d = A.CRIA[key], wx = x * TS, wy = y * TS;
+    const side = sideOf('c' + a.id, a) === 3 ? 1 : 0;
+    const frame = a.path ? 1 + (Math.floor(a.walk * 4) % 2) : 0;
+    const sh = A.spr[d.w >= 16 ? 'midShadow' : 'shadow'];
+    blit(sh, wx - sh.width / 2, wy + 1);
+    const alt = a.id % 3 === 0 && key !== 'galo' && key !== 'pinto' && key !== 'carneiro';
+    ctx.drawImage(A.criaSheet(key, alt), frame * d.w, side * d.h, d.w, d.h, Math.round((wx - d.w / 2) * sc + ox), Math.round((wy + 3 - d.h) * sc + oy), Math.round(d.w * sc), Math.round(d.h * sc));
+  }
   // moquém, jirau e forno de barro: a obra (no nível dela) e o que está nela
   function drawWorks(S2, b, bx, by, ghost, now, lv) {
     const al = ghost ? 0.45 : undefined, big = lv >= 2;
@@ -815,6 +912,46 @@
       const kinds = ['frutas', 'peixe', 'defumado'];
       for (let i = 0; i < n; i++) blit(it[st[kinds[i]] > 0 ? kinds[i] : 'frutas'], bx + 6 + i * 8, by + 30);
     }
+  }
+  // bichos da Etapa 9: só de lado; subindo ou descendo, olham para o último lado para onde andaram
+  const lastSide = new Map();
+  function sideOf(key, e) {
+    if (e.dir === 2 || e.dir === 3) { lastSide.set(key, e.dir); return e.dir; }
+    return lastSide.get(key) || 2;
+  }
+  const SHADOW = { anta: 'midShadow', onca: 'midShadow', jacare: 'bigShadow' };
+  function drawBicho(e, x, y, now) {
+    const sp = e.sp || 'capivara';
+    if (sp === 'capivara') { drawCapi(e, x, y); return; }
+    const wx = x * TS, wy = y * TS, d = A.BEAST[sp];
+    if (e.state === 'morta') { blit(A.beastDead(sp), wx - d.w / 2, wy + 3 - d.h); return; }
+    const side = sideOf('f' + e.id, e) === 3 ? 1 : 0;
+    if (sp === 'jacare' && e.inWater && e.wx !== undefined) {
+      // dentro d'água: só os olhos e o focinho de fora, e uma marola em volta
+      const jx = e.wx * TS, jy = e.wy * TS, ww = A.JACARE_WATER_W, wh = A.JACARE_WATER_H, t = now / 650 + e.id;
+      rect(jx - 7 + Math.sin(t) * 1.5, jy + 2, 4, 1, 'rgba(200,244,255,0.55)');
+      rect(jx + 3 - Math.sin(t) * 1.5, jy + 2, 4, 1, 'rgba(200,244,255,0.55)');
+      ctx.drawImage(A.jacareWater(), 0, side * wh, ww, wh, Math.round((jx - ww / 2) * sc + ox), Math.round((jy - 1) * sc + oy), Math.round(ww * sc), Math.round(wh * sc));
+      return;
+    }
+    if (sp === 'jacu' && e.fly) {
+      // voando: as asas batem, um pouco acima do chão (a sombra fica embaixo)
+      const fw = A.JACU_FLY_W, fh = A.JACU_FLY_H, f = Math.floor(now / 110 + e.id) % 2;
+      blit(A.spr.shadow, wx - 5, wy + 1);
+      ctx.drawImage(A.birdFly(), f * fw, side * fh, fw, fh, Math.round((wx - fw / 2) * sc + ox), Math.round((wy - 16) * sc + oy), Math.round(fw * sc), Math.round(fh * sc));
+      return;
+    }
+    const moving = !!e.path, frame = moving ? 1 + (Math.floor(e.walk * 4) % 2) : 0;
+    const sh = A.spr[SHADOW[sp] || 'shadow'];
+    blit(sh, wx - sh.width / 2, wy + 1);
+    ctx.drawImage(A.beastSheet(sp, e.big), frame * d.w, side * d.h, d.w, d.h, Math.round((wx - d.w / 2) * sc + ox), Math.round((wy + 3 - d.h) * sc + oy), Math.round(d.w * sc), Math.round(d.h * sc));
+    if (e.state === 'investida') bang(wx, wy + 3 - d.h - 2, now);   // vem para cima: um "!" vermelho
+  }
+  // "!" de perigo em cima de um bicho
+  function bang(wx, wy, now) {
+    const b = Math.round(Math.sin(now / 120) * 1);
+    rect(wx - 1, wy - 7 + b, 3, 5, '#181425'); rect(wx - 1, wy - 1 + b, 3, 2, '#181425');
+    rect(wx, wy - 6 + b, 1, 3, '#e43b44'); rect(wx, wy + b, 1, 1, '#e43b44');
   }
   // capivaras (e a abatida, deitada)
   function drawCapi(e, x, y) {
@@ -882,7 +1019,7 @@
     for (let i = 0; i < 12; i++) rect(x, top - 4 + i, 1, 1, i < 2 ? '#c0cbdc' : '#b86f50');
   }
 
-  const TOOL = { madeira: 'axe', pedra: 'pick', construir: 'hammer', pesca: 'rod', argila: 'pick', oficio: 'hammer', caminho: 'pick' };
+  const TOOL = { madeira: 'axe', pedra: 'pick', construir: 'hammer', pesca: 'rod', argila: 'pick', oficio: 'hammer', caminho: 'pick', roca: 'hoe', cerca: 'hammer' };
   function drawPerson(S, p, x, y, now) {
     const st = G.Family.stage(S, p), kid = st === 'crianca';
     const sheet = kid ? A.kidSheet(p) : A.personSheet(p, st === 'idoso');
@@ -909,7 +1046,7 @@
     const moving = p.path && p.pathI < p.path.length;
     let frame = 0;
     if (moving) frame = 1 + (Math.floor(p.walk * 5) % 2);
-    const work = a && (a.stage === 'work' || a.stage === 'build');
+    const work = a && (a.stage === 'work' || a.stage === 'build' || (a.type === 'roca' && (a.stage === 'plant' || a.stage === 'weed' || a.stage === 'harvest')) || (a.type === 'criacao' && a.stage === 'tend'));
     const swing = work ? Math.floor(now / 260) % 2 : 0;
     const drummer = a && a.type === 'festa' && S.life && S.life.party && S.life.party.drummer === p.id && !moving;   // Etapa 8
     const dance = a && a.type === 'festa' && a.stage === 'dance' && !moving && !drummer;
@@ -931,7 +1068,7 @@
     });
     const Tk = (id) => G.Tech.known(S, id);
     if (work) drawTool(S, p, a, wx, wy, swing);
-    else if (a && a.type === 'caca' && (a.stage === 'go' || a.stage === 'aim')) { if (Tk('arco')) drawBow(wx, top, p.dir, a.stage === 'aim'); else drawSpear(wx, top, p.dir); }
+    else if (a && (a.type === 'caca' || a.type === 'defender') && (a.stage === 'go' || a.stage === 'aim' || a.stage === 'wait')) { if (Tk('arco')) drawBow(wx, top, p.dir, a.stage === 'aim'); else drawSpear(wx, top, p.dir); }   // na luta (Etapa 9), também
     else if (a && a.type === 'caca' && a.stage === 'cut' && Tk('faca')) drawKnife(wx, wy, p.dir, Math.floor(now / 220) % 2);
     else if (a && a.type === 'historia' && a.stage === 'tell' && S.life && S.life.story && S.life.story.music) drawFlute(wx, top, p.dir);
     else if (drummer) drawDrum(wx, wy, p.dir, now);
@@ -956,6 +1093,19 @@
   function drawEnt(S, e, x, y, now) {
     const wx = x * TS, wy = y * TS;
     const moving = !!e.path;
+    if (e.k === 'onca') {
+      // a onça (Etapa 9): na toca, some; acuada ou na luta, agachada
+      if (e.hidden) return;
+      const d = A.BEAST.onca, side = sideOf('n' + e.id, e) === 3 ? 1 : 0;
+      const frame = moving ? 1 + (Math.floor(e.walk * 3) % 2) : 0, low = e.state === 'acuada' || e.state === 'luta' ? 1 : 0;
+      blit(A.spr.midShadow, wx - 7.5, wy + 1);
+      const al = e.state === 'embora' ? Math.max(0.35, 1 - (e.t - (e.leftAt || e.t)) / 120) : 1;
+      if (al < 1) ctx.globalAlpha = al;
+      ctx.drawImage(A.beastSheet('onca'), frame * d.w, side * d.h, d.w, d.h, Math.round((wx - d.w / 2) * sc + ox), Math.round((wy + 3 - d.h + low) * sc + oy), Math.round(d.w * sc), Math.round(d.h * sc));
+      if (al < 1) ctx.globalAlpha = 1;
+      if (e.state === 'acuada') bang(wx, wy + 3 - d.h - 2, now);
+      return;
+    }
     if (e.k === 'lobo') {
       const sh = A.wolfSheet(e.fur || 0), fw = A.WOLF_W, fh = A.WOLF_H;
       const frame = moving ? 1 + (Math.floor(e.walk * 4) % 2) : 0;
@@ -976,8 +1126,19 @@
     // trouxa nas costas
     const bx = e.dir === 2 ? wx - 6 : e.dir === 3 ? wx + 2 : wx - 2;
     if (e.dir !== 0) rect(bx, top + 6, 4, 4, '#8a6440');
-    // esperando resposta: um balão com interrogação
     const g = S.narr.groups[e.gid];
+    // o mascate (Etapa 10) vem tocando os bichos que quer trocar
+    if (g && g.kind === 'mascate' && g.offer && !g.traded) {
+      const o = g.offer, n = Math.min(3, o.m + o.f), fr = moving ? 1 + (Math.floor(e.walk * 4) % 2) : 0;
+      for (let k = 0; k < n; k++) {
+        const key = o.sp === 'galinha' ? (k === 0 ? 'galo' : 'galinha') : o.sp === 'gado' ? (k === 0 ? 'boi' : 'vaca') : o.sp === 'ovelha' ? (k === 0 ? 'carneiro' : 'ovelha') : o.sp;
+        const d = A.CRIA[key], side = e.dir === 3 ? 1 : 0;
+        const ax = e.dir === 2 ? wx - 9 - k * 8 : e.dir === 3 ? wx + 9 + k * 8 : wx + (k - 1) * 9, ay = wy + (e.dir === 0 ? -5 : e.dir === 1 ? 6 : 1) + (k % 2) * 2;
+        blit(A.spr.shadow, ax - 5, ay + 1);
+        ctx.drawImage(A.criaSheet(key), fr * d.w, side * d.h, d.w, d.h, Math.round((ax - d.w / 2) * sc + ox), Math.round((ay + 3 - d.h) * sc + oy), Math.round(d.w * sc), Math.round(d.h * sc));
+      }
+    }
+    // esperando resposta: um balão com interrogação
     if (g && g.state === 'esperando') {
       const icon = A.icon('pergunta'), bob = Math.round(Math.sin(now / 260 + e.id) * 1);
       blit(icon, wx - icon.width / 2, top - 11 + bob);
@@ -988,6 +1149,18 @@
     const dark = Math.max(darkness(S.ck.hour), S.precip ? 0.2 : 0);
     if (dark < 0.3) return;
     const col = 'rgba(254,231,97,' + Math.min(1, dark * 1.4).toFixed(2) + ')';
+    // a onça e o jacaré na água (Etapa 9): o olho do lado para onde olham
+    const eye = (sp, key, e, x, y, w) => { const [ex, ey] = A.BEAST_EYES[sp], side = sideOf(key, e); rect(x + (side === 3 ? w - 1 - ex : ex), y + ey, 1, 1, col); };
+    for (const e of S.narr.ents) {
+      if (e.k !== 'onca' || e.gone || e.hidden || !G.Sim.isSeen(S, Math.floor(e.x), Math.floor(e.y))) continue;
+      const d = A.BEAST.onca, low = e.state === 'acuada' || e.state === 'luta' ? 1 : 0;
+      eye('onca', 'n' + e.id, e, U.lerp(e.px, e.x, alpha) * TS - d.w / 2, U.lerp(e.py, e.y, alpha) * TS + 3 - d.h + low, d.w);
+    }
+    if (S.fauna) for (const e of S.fauna.ents) {
+      if (e.sp !== 'jacare' || !e.inWater || e.wx === undefined || e.gone || !G.Sim.isSeen(S, Math.floor(e.x), Math.floor(e.y))) continue;
+      const side = sideOf('f' + e.id, e), ww = A.JACARE_WATER_W;
+      rect(e.wx * TS - ww / 2 + (side === 3 ? ww - 3 : 2), e.wy * TS, 1, 1, col);
+    }
     for (const e of S.narr.ents) {
       if (e.k !== 'lobo' || e.gone || !G.Sim.isSeen(S, Math.floor(e.x), Math.floor(e.y))) continue;
       const x = U.lerp(e.px, e.x, alpha) * TS - A.WOLF_W / 2, y = U.lerp(e.py, e.y, alpha) * TS - 6;
@@ -1000,6 +1173,7 @@
     const Tk = (id) => G.Tech.known(S, id);
     const weaving = a.type === 'oficio' && (a.make === 'mantas' || a.make === 'redes');   // no tear, só as mãos
     let kind = a.type === 'construir' ? 'hammer' : weaving ? null : TOOL[a.type];
+    if (a.type === 'roca' && a.stage === 'harvest') kind = null;   // colhe com as mãos
     // Etapa 8: a roupa se corta com a faca e se costura com a agulha; a rede vai para a água; o machado tem cabeça maior
     if (a.type === 'oficio' && a.make === 'roupas') kind = Tk('agulha') ? 'needle' : Tk('faca') ? 'knife' : null;
     if (a.type === 'pesca' && Tk('rede')) { drawNet(p, wx, wy, swing); return; }
@@ -1023,8 +1197,9 @@
     const up = swing === 0;
     const tx = d >= 2 ? hx + fx * (up ? 1 : 3) : hx + (up ? 0 : 1), ty = up ? hy - 5 : hy - 1;
     for (let i = 0; i < 4; i++) rect(tx - (d === 3 ? -i * 0 : 0), ty + i, 1, 1, '#733e39');
-    const head = kind === 'axe' || kind === 'bigaxe' ? '#c0cbdc' : kind === 'pick' ? '#8b9bb4' : '#5a6988';
+    const head = kind === 'axe' || kind === 'bigaxe' ? '#c0cbdc' : kind === 'pick' || kind === 'hoe' ? '#8b9bb4' : '#5a6988';
     if (kind === 'bigaxe') { rect(tx - (d === 3 ? 2 : 0), ty - 2, 3, 3, head); rect(tx, ty + 1, 1, 1, '#e4a672'); return; }   // pedra polida amarrada
+    if (kind === 'hoe') { rect(tx - (d === 3 ? 2 : 0), ty - 1, 3, 1, head); rect(tx + (d === 3 ? -2 : 2), ty, 1, 1, head); return; }   // enxada (Etapa 10)
     rect(tx - (kind === 'pick' ? 1 : 0), ty - 1, kind === 'pick' ? 3 : 2, 2, head);
   }
 
@@ -1035,6 +1210,11 @@
     if (type === 'moquem') return { img: S2.moquem, dy: -2 };
     if (type === 'jirau') return { img: S2.jirau, dy: 2 };
     if (type === 'forno') return { img: S2.forno, dy: 1 };
+    if (type === 'roca') return { img: A.rocaSoil('warm'), dy: 0 };
+    if (type === 'curral') {
+      if (!S2.curralGhost) { const [c, x] = A.mk(48, 60); for (const p of ['ground', 'back', 'front']) x.drawImage(A.curral(1, p), 0, 0); S2.curralGhost = c; }
+      return { img: S2.curralGhost, dy: -12 };
+    }
     const img = S2.shop[type] ? S2.shop[type][1] : S2.house[1];
     return { img, dy: 31 - img.height };
   }
@@ -1060,7 +1240,16 @@
   // pincel do caminho: os passos que o dedo (ou o mouse) está marcando
   function drawBrush(S, br) {
     const w = S.world;
-    const col = br.lv === 0 ? 'rgba(228,59,68,0.45)' : br.lv >= 3 ? 'rgba(192,203,220,0.55)' : 'rgba(210,160,110,0.55)';
+    // cerca (Etapa 10): as roças e currais já cercados ficam verdes (os abertos, com o contorno vermelho)
+    if (br.fence && G.Campo && S.campo) {
+      for (const b of S.buildings) {
+        if ((b.type !== 'roca' && b.type !== 'curral') || !b.built) continue;
+        const e = G.Campo.encl(S, b);
+        if (!e.open) for (const i of e.list) rect((i % w.W) * TS, ((i / w.W) | 0) * TS, TS, TS, 'rgba(99,199,77,0.16)');
+        outline(b.x * TS, b.y * TS, b.w * TS, b.h * TS, e.open ? '#e43b44' : '#63c74d');
+      }
+    }
+    const col = br.lv === 0 ? 'rgba(228,59,68,0.45)' : br.fence ? 'rgba(154,94,66,0.6)' : br.lv >= 3 ? 'rgba(192,203,220,0.55)' : 'rgba(210,160,110,0.55)';
     for (const t of br.tiles) {
       const x = t.i % w.W, y = (t.i / w.W) | 0;
       rect(x * TS + 1, y * TS + 1, TS - 2, TS - 2, t.ok ? col : 'rgba(228,59,68,0.3)');

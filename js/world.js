@@ -94,7 +94,7 @@
       const o = objAt(w, i);
       if (o && (o.k === 'tree' || o.k === 'rock')) b = 1;
     }
-    w.block[i] = b;
+    if (w.block[i] !== b) { w.block[i] = b; w.rev = (w.rev || 0) + 1; }   // rev: a área cercada é refeita
     w.slow[i] = w.bgrid[i] >= 0 ? 1 : 0;
   }
 
@@ -129,22 +129,30 @@
     return out;
   }
 
-  function expand(w, cur, onEdge) {
-    const W = w.W, cx = cur % W, cy = (cur / W) | 0;
+  // beast: 0 = gente (pula a cerca, mais devagar; em cima de caminho a cerca é porteira), 1 = bicho do mato (a cerca e
+  // as obras seguram), 2 = bicho de criação (e a água também). Bicho não passa na quina entre duas cercas.
+  // bwall: obra que é parede para bicho (casa, fogueira, oficina...); roça e curral não são
+  const wall = (w, i, beast) => (w.fence && w.fence[i] === 1) || (w.bwall && w.bwall[i] === 1) || (beast === 2 && IS_WATER[w.tile[i]] === 1);
+  function expand(w, cur, onEdge, beast) {
+    const W = w.W, cx = cur % W, cy = (cur / W) | 0, fence = w.fence;
     for (let k = 0; k < 8; k++) {
       const nx = cx + NB[k][0], ny = cy + NB[k][1];
       if (nx < 0 || ny < 0 || nx >= W || ny >= w.H) continue;
       const ni = ny * W + nx;
       if (w.block[ni]) continue;
       if (k >= 4 && (w.block[cy * W + nx] || w.block[ny * W + cx])) continue;
-      onEdge(ni, NB[k][2] * C.COST[w.tile[ni]] * (w.slow[ni] ? C.BUILD_PASS_COST : 1) * (w.road ? C.ROAD_MULT[w.road[ni]] : 1), nx, ny);
+      let c = NB[k][2] * C.COST[w.tile[ni]] * (w.slow[ni] ? C.BUILD_PASS_COST : 1) * (w.road ? C.ROAD_MULT[w.road[ni]] : 1);
+      if (beast) {
+        if (wall(w, ni, beast) || (k >= 4 && (wall(w, cy * W + nx, beast) || wall(w, ny * W + cx, beast)))) continue;
+      } else if (fence && fence[ni] && !(w.road && w.road[ni] >= 2)) c *= C.CERCA_PASS;
+      onEdge(ni, c, nx, ny);
     }
   }
 
   // A* até um tile
-  function findPath(w, start, goal, maxCost) {
+  function findPath(w, start, goal, maxCost, beast) {
     if (start === goal) return [];
-    if (w.block[goal]) return null;
+    if (w.block[goal] || (beast && wall(w, goal, beast))) return null;
     maxCost = maxCost || 400;
     ensure(w.W * w.H);
     const W = w.W, gx = goal % W, gy = (goal / W) | 0;
@@ -168,13 +176,13 @@
       if (closedBuf[cur] === stamp) continue;
       closedBuf[cur] = stamp;
       gc = gBuf[cur];
-      expand(w, cur, edge);
+      expand(w, cur, edge, beast);
     }
     return null;
   }
 
   // Dijkstra até o primeiro tile que passa no teste (allowSlow: também dentro de obras, quando não há outro jeito)
-  function findNearest(w, start, test, maxCost, allowSlow) {
+  function findNearest(w, start, test, maxCost, allowSlow, beast) {
     maxCost = maxCost || C.SEARCH_MAX;
     ensure(w.W * w.H);
     gBuf[start] = 0; seenBuf[start] = stamp;
@@ -195,7 +203,7 @@
       gc = gBuf[cur];
       const r = w.slow[cur] && !allowSlow ? 0 : test(cur);
       if (r) return { idx: cur, path: rebuild(start, cur), data: r, cost: gc };
-      expand(w, cur, edge);
+      expand(w, cur, edge, beast);
     }
     return null;
   }
@@ -304,7 +312,7 @@
 
   G.T = T; G.IS_WATER = IS_WATER; G.TNAME = TNAME;
   G.W = {
-    classify, generate, addObj, objAt, refreshBlock, removeObj,
+    classify, generate, addObj, objAt, refreshBlock, removeObj, wall,
     findPath, findNearest, adjObj, waterAdj, waterCount8, campFree, evalSite, bestSite, siteLabel,
     idx: (w, x, y) => y * w.W + x,
   };

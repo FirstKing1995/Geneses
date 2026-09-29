@@ -96,12 +96,16 @@
     madeira: ['Cortei lenha até doer o braço.', 'Derrubei uma árvore grande.'],
     pedra: ['Quebrei pedra a manhã toda.', 'Achei umas pedras boas lá pro norte.'],
     pesca: ['Pesquei. O rio tava generoso.', 'Fiquei na beira do rio. Peixe que é bom, pouco.'],
-    caca: ['Fui atrás das capivaras.', 'Passei o dia de tocaia.'],
+    caca: ['Fui caçar na mata.', 'Passei o dia de tocaia.', 'Segui rastro de bicho o dia todo.'],
     argila: ['Cavei barro na beira d\'água.'],
     construir: ['Trabalhei na obra.', 'Amarrei vara o dia inteiro.'],
     oficio: ['Lasquei pedra e fiz ferramenta.', 'Costurei couro.'],
     conservar: ['Arrumei o moquém.', 'Espalhei fruta no jirau.'],
     fogo: ['Cuidei do fogo.'],
+    // Etapa 10: campo
+    roca: ['Passei o dia na roça.', 'Capinei a roça. O mato não dá trégua.', 'Plantei, cova por cova.'],
+    criacao: ['Cuidei dos bichos do curral.', 'Recolhi os ovos. Tinha um escondido no capim.', 'Dei ração para a bicharada.'],
+    cerca: ['Finquei cerca o dia todo.', 'Amarrei vara na cerca nova.'],
   };
   const DISC_ART = { pedra: 'a pedra lascada', cestos: 'os cestos', lanca: 'a lança', anzol: 'o anzol', conserva: 'o moquém e o jirau', ceramica: 'a cerâmica' };
   const artOf = (id) => DISC_ART[id] || (G.Tech.DISC[id] && G.Tech.DISC[id].art) || '';   // as invenções (Etapa 8) trazem o seu
@@ -188,6 +192,15 @@
     ['Que bom que você tá aqui.', 'Não ia estar em outro lugar.'],
     ['Me dá a mão?', 'Sempre.'],
     ['Guardei a fruta mais doce pra você.', 'Por isso que eu gosto de você.'],
+  ];
+  // 0.10: com as noites picantes ligadas, o namoro dos pares (sempre adultos) fica mais atrevido
+  const CASAL_PICANTE = [
+    ['Hoje à noite você vem pra minha rede?', 'Só se você prometer não dormir cedo.'],
+    ['Tá frio. Me esquenta mais tarde?', 'Guarda um lugar debaixo da manta.'],
+    ['Sonhei com você de novo.', 'Sonho bom ou sonho de dar vergonha?'],
+    ['Tô com saudade das nossas noites.', 'Hoje eu durmo lá.'],
+    ['Fecha a barraca cedo hoje?', 'E quem disse que a gente vai dormir?'],
+    ['Me dá um beijo antes do trabalho?', 'Um só não dá.'],
   ];
   const KID_Q = [
     ['Por que o céu é azul?', ['Porque alguém lá em cima pintou assim.', 'Ninguém sabe ainda. Descobre pra mim?']],
@@ -288,7 +301,8 @@
     if (ka < 12 && kb < 12) { const [q, r] = pick(S, KIDS2); return dlg('crianca', [[0, q], [1, r]]); }
     // par: namoro
     if (F.isPartner(a, b) && S.rng.next() < 0.6) {
-      const [q, r] = pick(S, CASAL);
+      const hot = F.spicy && F.spicy(S) && F.age(S, a) >= 18 && F.age(S, b) >= 18 && S.rng.next() < 0.35;
+      const [q, r] = pick(S, hot ? CASAL_PICANTE : CASAL);
       return dlg('casal', [[0, q], [1, r]], { style: 'casal' });
     }
     // papo: um tópico que caiba agora
@@ -373,7 +387,7 @@
   };
   const storyHour = (S) => S.ck.hour >= 17.5 && S.ck.hour < 19.5;   // de tardinha, antes do sono
   function calmEvening(S) {
-    return storyHour(S) && !S.precip && !(G.Narr && (G.Narr.wolvesOut(S) || G.Narr.is(S, 'nevasca') || G.Narr.is(S, 'tempestade'))) && !(S.life.party && S.life.party.on);
+    return storyHour(S) && !S.precip && !(G.Narr && (G.Narr.beastsOut(S) || G.Narr.is(S, 'nevasca') || G.Narr.is(S, 'tempestade'))) && !(S.life.party && S.life.party.on);
   }
   const fine = (p) => p.needs.fome >= 30 && p.needs.sede >= 30 && p.needs.energia >= 20 && p.needs.calor >= 30 && p.needs.saude >= 40;
   L.canTell = function (S, p) {
@@ -477,6 +491,8 @@
     acolhida: (S, x) => 'Chegou gente nova: ' + x.names + '.',
     fogo: () => 'Acenderam a primeira fogueira.',
     era: () => 'O acampamento virou aldeia.',
+    onca: (S, x) => 'A onça foi vencida' + (x.name ? ' por ' + x.name : '') + '.',
+    colheita: (S, x) => 'A primeira colheita da roça' + (x.k && C.ROCA[x.k] ? ', de ' + C.ROCA[x.k].name.toLowerCase() : '') + '.',   // Etapa 10
   };
   L.partyText = (S, pt) => (PARTY_TXT[pt.why] ? PARTY_TXT[pt.why](S, pt) : '');
   // marca uma festa para a tardinha (hoje, se ainda dá; senão amanhã)
@@ -508,7 +524,7 @@
   function startParty(S) {
     const l = S.life, pt = l.party, Sm = Sim();
     const f = L.campFire(S, true);
-    const bad = !f || (G.Narr && (G.Narr.wolvesOut(S) || G.Narr.is(S, 'nevasca') || G.Narr.is(S, 'tempestade'))) || S.precip === 'chuva';
+    const bad = !f || (G.Narr && (G.Narr.beastsOut(S) || G.Narr.is(S, 'nevasca') || G.Narr.is(S, 'tempestade'))) || S.precip === 'chuva';
     if (bad) {
       // fica para amanhã (uma vez); depois, deixa para outra ocasião
       if (pt.tries++ < 1) { pt.at += DAY(); pt.until += DAY(); } else l.party = null;
@@ -539,7 +555,7 @@
     let fed = 0;
     if (S.ctx.foodDays > C.PARTY_FOOD_DAYS) {
       for (const q of ps) {
-        const k = ['peixe', 'carne', 'frutas', 'defumado', 'seca'].find((x) => S.stock[x] > 0);
+        const k = ['peixe', 'carne', 'frutas', 'abobora', 'milho', 'feijao', 'mandioca', 'ovos', 'defumado', 'seca'].find((x) => S.stock[x] > 0);   // Etapa 10: a roça também vai à festa
         if (!k) break;
         S.stock[k]--; q.needs.fome = Math.min(100, q.needs.fome + G.Tech.foodValue(k)); fed++;
       }
@@ -557,6 +573,8 @@
       a.rel[b.id] = (a.rel[b.id] || 0) + pm; b.rel[a.id] = (b.rel[a.id] || 0) + pm;
       if (F.isPartner(a, b)) F.addAfeto(S, a, b, 3 * pm);
     }
+    // 0.10: adultos ligados por pares podem esticar a noite juntos (só adultos; desliga no menu)
+    if (F.afterParty) F.afterParty(S, ps);
     // quem tem mais fé agradece pela noite
     const v = ps.filter((q) => age(S, q) >= 7).sort((a, b) => b.fe - a.fe)[0];
     if (v) God().thank(S, v, pick(S, ['Obrigad' + oa(v) + ', céu, por esta noite.', 'Obrigad' + oa(v) + ' por tudo que a gente tem.']), C.THANKS.festa, true);

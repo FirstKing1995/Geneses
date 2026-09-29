@@ -55,7 +55,7 @@
       hint: 'Quem pesca agora joga a rede.' },
     vasos: { name: 'Vasos', icon: 'vaso', req: ['ceramica'], art: 'os vasos',
       learn: 'cavando argila, cuidando do fogo e carregando água',
-      gives: 'Peixe e carne cozidos no vaso sustentam 25% mais.',
+      gives: 'Peixe, carne, ovo e o que vem da roça, cozidos no vaso, sustentam 25% mais.',
       story: (n) => n + ' moldou um vaso de boca larga e pôs no fogo com água e peixe: o povo aprendeu a cozinhar.',
       hint: 'A comida cozida no vaso rende mais.' },
   };

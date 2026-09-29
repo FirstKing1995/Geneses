@@ -9,7 +9,7 @@ const path = require('path');
 const fs = require('fs');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 globalThis.G = {};
-for (const f of ['core', 'config', 'world', 'sim', 'family', 'life', 'tech', 'invencoes', 'obras', 'fauna', 'ai', 'god', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
+for (const f of ['core', 'config', 'world', 'sim', 'family', 'life', 'tech', 'invencoes', 'obras', 'fauna', 'bichos', 'campo', 'ai', 'god', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
 const { W, Sim, CFG: C, Family: F, God, Save, AI, Tech: T, Fauna: FA, Offline: Off } = G;
 const Y = 60 * 1440, D = 1440;
 
@@ -103,7 +103,7 @@ function longRun(seed, mode, years) {
       }
       if (d % 60 === 59) {
         const al = S.people.filter((p) => p.alive);
-        out.fauna0 = Math.min(out.fauna0, FA.alive(S).length);
+        out.fauna0 = Math.min(out.fauna0, FA.alive(S).filter((e) => e.sp === 'capivara').length);   // Etapa 9: só as capivaras
         out.years.push({ y: (d + 1) / 60, pop: al.length, def: st.defumado, seca: st.seca, couro: st.couro, fer: st.ferramentas, rou: st.roupas, fauna: FA.alive(S).length });
       }
     }
@@ -190,7 +190,7 @@ check('Revelação custa ' + C.REVELACAO_COST + ' de Poder', Math.round(S.god.po
 check('a Revelação não pula etapa', T.open(S) === 'lanca' && !T.known(S, 'lanca'));
 learnUpTo(S, 'ceramica'); S.god.poder = 100;
 check('trilha completa, invenções sem prática: o milagre explica', /não está pronto/.test(God.canCast(S, 'revelacao')), God.canCast(S, 'revelacao'));
-for (const id of G.Inv.ORDER) S.tech.known[id] = { t: S.t, by: '', how: 'pratica' };
+for (const id of G.Inv.ORDER.concat(G.Campo ? G.Campo.ORDER : [])) S.tech.known[id] = { t: S.t, by: '', how: 'pratica' };   // Etapa 10: o campo também
 check('sem nada a revelar, o milagre explica', /já sabe tudo/.test(God.canCast(S, 'revelacao')), God.canCast(S, 'revelacao'));
 
 // ---------- 3. ferramentas ----------
@@ -252,8 +252,10 @@ check('bebê no colo não conta como precisando de roupa', (() => { const b = F.
 
 // ---------- 5. capivaras e caça ----------
 S = world(42);
-const herds0 = S.fauna.herds.length, capi0 = FA.alive(S).length;
-check('o mundo começa com bandos de capivaras perto da água', herds0 === C.FAUNA_HERDS && capi0 >= C.FAUNA_HERDS * C.FAUNA_HERD[0], herds0 + ' bandos, ' + capi0 + ' capivaras');
+// Etapa 9: os outros bichos também estão no mapa; aqui contam as capivaras
+const capiHerds = (S) => S.fauna.herds.filter((h) => (h.sp || 'capivara') === 'capivara');
+const herds0 = capiHerds(S).length, capi0 = FA.alive(S).filter((e) => e.sp === 'capivara').length;
+check('o mundo começa com bandos de capivaras perto da água', herds0 === C.BICHOS.capivara.n && capi0 >= herds0 * C.BICHOS.capivara.herd[0], herds0 + ' bandos, ' + capi0 + ' capivaras');
 check('os bandos ficam longe do acampamento', S.fauna.herds.every((h) => Math.hypot(h.x - S.camp.x - 1, h.y - S.camp.y - 1) >= C.FAUNA_DIST[0] - 1));
 learnUpTo(S, 'lanca');
 S.stock.ferramentas = 4;
@@ -265,7 +267,7 @@ days(S, 8, (s) => { for (const e of s.events) if (e.k === 'throw') throws++; });
 check('com lança, o povo caça capivara', S.stats.hunted > 0, S.stats.hunted + ' caçadas, ' + throws + ' lançadas');
 const carried = S.people.reduce((a, q) => a + (q.carry && q.carry.k === 'caca' ? q.carry.couro : 0), 0);
 check('cada capivara dá carne e couro', S.stock.couro + carried === S.stats.hunted * C.CACA_COURO, 'couro ' + S.stock.couro + (carried ? ' + ' + carried + ' nas costas de quem volta' : ''));
-check('o povo não acaba com um bando (fica o casal)', (() => { const size = {}; for (const e of FA.alive(S)) size[e.h] = (size[e.h] || 0) + 1; return S.fauna.herds.every((h) => !size[h.id] || size[h.id] >= Math.min(C.CACA_KEEP, 2)); })());
+check('o povo não acaba com um bando (fica o casal)', (() => { const size = {}; for (const e of FA.alive(S)) size[e.h] = (size[e.h] || 0) + 1; return capiHerds(S).every((h) => !size[h.id] || size[h.id] >= Math.min(C.CACA_KEEP, 2)); })());
 // presa: só de bando com mais que o casal
 for (const h of S.fauna.herds) { const es = FA.alive(S).filter((e) => e.h === h.id); for (const e of es.slice(C.CACA_KEEP)) { FA.kill(S, e); e.gone = true; } }
 S.fauna.ents = S.fauna.ents.filter((e) => !e.gone);
@@ -295,7 +297,7 @@ const h1 = S.fauna.herds[1];
 for (const e of FA.alive(S).filter((x) => x.h === h1.id)) { FA.kill(S, e); e.gone = true; }
 S.fauna.ents = S.fauna.ents.filter((e) => !e.gone);
 for (let i = 0; i < C.FAUNA_NEW_HERD_DAYS; i++) FA.daily(S);
-check('bando que acabou dá lugar a outro, em outro canto', !S.fauna.herds.some((h) => h.id === h1.id) && S.fauna.herds.length === herds0);
+check('bando que acabou dá lugar a outro, em outro canto', !S.fauna.herds.some((h) => h.id === h1.id) && capiHerds(S).length === herds0);
 const hL = S.fauna.herds[3];
 for (const e of FA.alive(S).filter((x) => x.h === hL.id).slice(1)) { FA.kill(S, e); e.gone = true; }
 S.fauna.ents = S.fauna.ents.filter((e) => !e.gone);
@@ -436,7 +438,7 @@ try { S3 = Save.deserialize(old); } catch (e) { err = e; }
 check('save da v0.4 abre na v0.5', !!S3 && !err, err ? err.message : S3.people.filter((q) => q.alive).length + ' vivos, dia ' + Math.floor(S3.t / D));
 if (S3) {
   check('save antigo começa a trilha do zero', T.count(S3) === 0 && T.open(S3) === 'pedra');
-  check('save antigo ganha capivaras', S3.fauna.herds.length === C.FAUNA_HERDS && FA.alive(S3).length > 0);
+  check('save antigo ganha capivaras (e, na 0.9, os outros bichos)', capiHerds(S3).length === C.BICHOS.capivara.n && FA.alive(S3).some((e) => e.sp === 'capivara') && new Set(FA.alive(S3).map((e) => e.sp)).size >= 8);
   check('save antigo ganha estoque e Vontades novas', ['carne', 'defumado', 'seca', 'couro', 'argila', 'ferramentas', 'roupas'].every((k) => S3.stock[k] === 0) && ['caca', 'argila', 'oficio', 'conservar'].every((k) => S3.vontades[k] === C.DEFAULT_VONTADES[k]));
   check('save antigo: ninguém com ferramenta ou roupa, habilidades novas zeradas', S3.people.every((q) => q.tool === null && q.roupa === null && q.skills.caca === 0 && q.skills.oficio === 0));
   const pend = S3.buildings.find((b) => !b.built);
@@ -458,6 +460,7 @@ res = Off.run(S, 2 * D);
 check('a era pode se fechar com o jogo fechado (a janela aparece ao voltar)', !!S.stats.eraEnd && !S.stats.eraSeen && res.newChron.some((c) => /Era da Família/.test(c.text)));
 
 console.log('unidades: ' + ok + ' ok, ' + bad + ' falhas');
+if (process.argv[2] === 'u') { process.exitCode = bad ? 1 : 0; return; }   // só as unidades
 
 // ---------- simulação longa ----------
 const YEARS = +process.argv[2] || 20;

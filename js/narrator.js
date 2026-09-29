@@ -21,13 +21,16 @@
     andarilho: { name: 'Andarilho', bad: false, icon: 'pessoa' },
     veranico: { name: 'Veranico', bad: false, icon: 'verao' },
     mel: { name: 'Mel', bad: false, icon: 'mel' },
+    onca: { name: 'Onça', bad: true, big: true, icon: 'onca' },   // Etapa 9
+    praga: { name: 'Praga', bad: true, big: false, icon: 'praga' },   // Etapa 10: gafanhotos na roça
   };
   const WARN = {
     nevasca: 'O céu fechou no norte e o vento esfriou. Amanhã vem nevasca: juntem lenha e fiquem perto do fogo.',
     lobos: 'Uivos na mata. Esta noite, todos perto do fogo.',
     tempestade: 'O vento mudou e o céu escureceu. Vem tempestade.',
+    onca: 'Pegadas de onça perto do acampamento. De noite, ninguém sozinho no escuro.',
   };
-  const SAY = { nevasca: 'Vem nevasca…', lobos: 'Ouviu isso? Lobos.', tempestade: 'Vem água aí.' };
+  const SAY = { nevasca: 'Vem nevasca…', lobos: 'Ouviu isso? Lobos.', tempestade: 'Vem água aí.', onca: 'Olha o tamanho dessas pegadas… onça.' };
 
   N.kind = (S) => C.NARRADORES[S && S.narr && S.narr.kind] || C.NARRADORES[C.NARR_DEFAULT];
   N.is = (S, k) => !!(S.narr && S.narr.active[k]);
@@ -90,9 +93,9 @@
   N.thirstMult = (S) => (N.is(S, 'seca') ? C.SECA_THIRST : 1);
   N.waterMult = (S) => (N.is(S, 'seca') ? C.SECA_WATER : 1);
   N.fishMult = (S) => (N.is(S, 'seca') ? C.SECA_FISH : N.is(S, 'nevasca') ? C.NEVASCA_FISH : N.is(S, 'piracema') ? C.PIRACEMA_FISH : 1);
-  N.workMult = (S, wk) => (wk === 'fogo' ? 1 : N.is(S, 'nevasca') ? C.NEVASCA_WORK : N.is(S, 'tempestade') ? 0.5 : N.wolvesOut(S) ? 0.3 : 1);
-  // noite de lobos (avisada ou já começada): o fogo tem de ficar aceso
-  N.wantFire = (S) => { const n = S.narr; return !!(n && ((n.plan && n.plan.k === 'lobos' && n.plan.warned) || n.active.lobos || N.wolvesOut(S))); };
+  N.workMult = (S, wk) => (wk === 'fogo' ? 1 : N.is(S, 'nevasca') ? C.NEVASCA_WORK : N.is(S, 'tempestade') ? 0.5 : N.beastsOut(S) ? 0.3 : 1);
+  // noite de lobos ou de onça (avisada ou já começada): o fogo tem de ficar aceso
+  N.wantFire = (S) => { const n = S.narr; return !!(n && ((n.plan && (n.plan.k === 'lobos' || n.plan.k === 'onca') && n.plan.warned) || n.active.lobos || n.active.onca || N.beastsOut(S))); };
   N.bushMult = (S) => (N.is(S, 'seca') ? 0 : N.is(S, 'fartura') ? 2 : 1);
 
   // ---------- o diretor ----------
@@ -202,7 +205,11 @@
       if (!big || n.aim) pack = Math.min(pack, 3);
       add('lobos', [1, 0.8, 1.4, 1.2][ck.season], pack >= 4, { pack });
     }
+    // Etapa 9: a onça, a partir do segundo ano, no máximo uma vez a cada 60 dias
+    if (alive(S).length >= 3 && ck.year >= 2 && !n.log.some((e) => e.k === 'onca' && ck.day - e.day < 60)) add('onca', 0.7, true);
     if (ck.season <= 2) add('tempestade', 1, false);
+    // Etapa 10: gafanhotos numa roça que está crescendo (verão e outono, no máximo uma vez a cada 40 dias)
+    if (G.Campo && (ck.season === 1 || ck.season === 2) && G.Campo.growing(S).length && !n.log.some((e) => e.k === 'praga' && ck.day - e.day < 40)) add('praga', 0.6, false);
     return out.length ? weighted(S, out) : null;
   }
   function bushesNear(S) {
@@ -235,6 +242,7 @@
     switch (e.k) {
       case 'nevasca': warnAt = h(7 + S.rng.next() * 3); at = h(27 + S.rng.next() * 5); break;   // aviso de manhã, começa na madrugada seguinte
       case 'lobos': warnAt = h(18 + S.rng.next()); at = h(20.5 + S.rng.next() * 1.5); break;
+      case 'onca': warnAt = h(16 + S.rng.next() * 1.5); at = h(19.5 + S.rng.next()); break;
       case 'tempestade': warnAt = h(10 + S.rng.next() * 3); at = warnAt + 90; break;
       default: warnAt = at = h(7 + S.rng.next() * 4);
     }
@@ -270,7 +278,7 @@
       if (hr >= 8 && hr < 16 && !n.ents.some((e) => e.k === 'lobo')) startCouple(S);
     }
     for (const k of Object.keys(n.active)) {
-      if (k !== 'lobos' && S.t >= n.active[k].until) finish(S, k);
+      if (k !== 'lobos' && k !== 'onca' && S.t >= n.active[k].until) finish(S, k);
     }
   };
 
@@ -296,8 +304,16 @@
       case 'lobos': {
         const made = spawnWolves(S, o.pack || 2);
         if (!made) return;
-        n.active.lobos = { t0: S.t, pack: made, bites: 0, stolen: 0, killed: 0, hurt: [] };
+        n.active.lobos = { t0: S.t, pack: made, bites: 0, stolen: 0, killed: 0, fought: 0, hurt: [] };
         Sm.toast(S, (made === 2 ? 'Dois lobos rondam' : made + ' lobos rondam') + ' o acampamento!', 'bad');
+        break;
+      }
+      case 'onca': {
+        if (!spawnOnca(S)) return;
+        const nights = rint(S, C.ONCA_NIGHTS[0], C.ONCA_NIGHTS[1]);
+        n.active.onca = { t0: S.t, until: S.t + nights * D() - 3 * 60, bites: 0, hurt: [], fought: 0, killedBy: '' };
+        Sm.toast(S, 'Uma onça ronda o acampamento!', 'bad');
+        S.events.push({ k: 'roar' });
         break;
       }
       case 'fartura': {
@@ -305,6 +321,7 @@
         for (const b of S.world.objs) if (b.k === 'bush' && Math.hypot(b.x - c.x, b.y - c.y) <= C.FARTURA_R) b.fruit = C.BUSH_MAX;
         n.active.fartura = { t0: S.t, until: S.t + C.FARTURA_DAYS * D() };
         Sm.chron(S, 'Os arbustos carregaram como nunca: é tempo de fartura.');
+        if (G.Campo) G.Campo.onFartura(S);   // Etapa 10: a roça que está crescendo também rende mais
         for (const p of alive(S)) Sm.addMem(S, p, 'fartura');
         if (G.Life) G.Life.onGood(S, 'fartura');
         break;
@@ -325,6 +342,12 @@
         S.events.push({ k: 'float', x: S.camp.x + 1, y: S.camp.y + 0.6, text: '+' + C.MEL_FOOD + ' comida' });
         for (const p of alive(S)) Sm.addMem(S, p, 'mel');
         if (G.Life) G.Life.onGood(S, 'mel');
+        break;
+      }
+      case 'praga': {
+        const txt = G.Campo ? G.Campo.pest(S) : '';
+        if (!txt) return;   // a roça foi colhida antes: os gafanhotos passaram longe
+        Sm.chron(S, txt);
         break;
       }
       case 'andarilho': {
@@ -359,6 +382,7 @@
       case 'piracema': Sm.toast(S, 'A piracema acabou.', ''); break;
       case 'veranico': Sm.toast(S, 'O veranico acabou. O frio voltou.', 'warn'); break;
       case 'lobos': Sm.chron(S, wolvesStory(S, a)); break;
+      case 'onca': Sm.chron(S, oncaStory(S, a)); break;
     }
     S.events.push({ k: 'narr', ev: k, on: false });
   }
@@ -368,12 +392,27 @@
     if (names.length) did.push('atacaram ' + Sim().listNames(names));
     if (a.stolen) did.push('levaram ' + a.stolen + ' de comida');
     let txt = did.length ? 'Os lobos ' + (did.length > 1 ? did[0] + ' e ' + did[1] : did[0]) + '.' : 'Os lobos rondaram a noite toda, mas o fogo guardou o povo.';
-    if (a.killed) txt += a.killed === 1 ? ' Um raio abateu um deles.' : ' Raios abateram ' + a.killed + ' deles.';
+    if (a.killed) txt += a.killed === 1 ? ' Um deles ficou pelo caminho.' : ' ' + a.killed + ' deles ficaram pelo caminho.';
     return txt;
+  }
+  function oncaStory(S, a) {
+    const Sm = Sim(), P = (ids) => (ids || []).map((id) => Fam().person(S, id)).filter(Boolean);
+    const hurt = P(a.hurt), hunt = P(a.hunt), pounced = P(a.pounced), out = [];
+    if (hurt.length) out.push('A onça atacou ' + Sm.listNames(hurt) + '.');
+    if (hunt.length) {
+      const fem = pounced.every((q) => q.sex === 'F'), ferid = pounced.length > 1 ? (fem ? ' saíram feridas' : ' saíram feridos') : fem ? ' saiu ferida' : ' saiu ferido';
+      out.push((hurt.length ? 'Depois, ' : '') + Sm.listNames(hunt) + ' foram atrás dela na mata' + (pounced.length ? '; ' + Sm.listNames(pounced) + ferid : '') + '.');
+    }
+    if (a.killedBy === 'raio') out.push('O raio de Deus abateu a onça. O povo ficou com a pele e a carne dela.');
+    else if (a.killedBy) out.push(a.killedBy + (hunt.length ? ' deu o golpe final.' : ' enfrentou a onça e venceu.') + ' O povo ficou com a pele e a carne dela.');
+    else if (a.escaped) out.push('Ferida, ela escapou e não voltou mais.');
+    else if (hurt.length || hunt.length) out.push(a.fought ? 'Ela levou golpes do povo e sumiu na mata.' : 'Ela sumiu na mata.');
+    else out.push(a.fought ? 'A onça rondou o acampamento, levou golpes do povo e sumiu na mata.' : 'A onça rondou o acampamento por umas noites, mas ninguém ficou sozinho no escuro.');
+    return out.join(' ');
   }
 
   // uma morte: o aperto que estava para vir fica para depois (respiro)
-  const PASSED = { nevasca: 'O vento virou: a nevasca passou longe.', tempestade: 'O céu abriu. A tempestade passou longe.', lobos: 'Os uivos se afastaram.' };
+  const PASSED = { nevasca: 'O vento virou: a nevasca passou longe.', tempestade: 'O céu abriu. A tempestade passou longe.', lobos: 'Os uivos se afastaram.', onca: 'As pegadas da onça seguiram para longe.' };
   N.onDeath = function (S) {
     const n = S.narr;
     if (!n) return;
@@ -398,9 +437,26 @@
   N.onRaio = function (S, x, y) {
     const n = S.narr;
     if (!n) return null;
+    const cx = x + 0.5, cy = y + 0.5;
+    // a onça (Etapa 9): o raio abate ou espanta até a noite seguinte
+    const onca = n.ents.find((e) => e.k === 'onca' && !e.gone && !e.hidden && Math.hypot(e.x - cx, e.y - cy) < 6);
+    if (onca) {
+      G.God.answerKind(S, ['onca']);
+      G.God.align(S, 2);
+      for (const p of alive(S)) if (Math.hypot(p.x - cx, p.y - cy) < 10) { G.God.faith(S, p, 3); Sim().addMem(S, p, 'viuMilagre'); }
+      if (Math.hypot(onca.x - cx, onca.y - cy) < 1.6) {
+        onca.gone = true;
+        const a = n.active.onca;
+        if (a) a.killedBy = 'raio';
+        S.stock.carne += C.ONCA_CARNE; S.stock.couro += C.ONCA_COURO;
+        S.stats.oncasKilled = (S.stats.oncasKilled || 0) + 1;
+        return 'O raio abateu a onça: +' + C.ONCA_CARNE + ' carne e +' + C.ONCA_COURO + ' couro no estoque.';
+      }
+      toDen(S, onca);
+      return 'O trovão espantou a onça para a mata.';
+    }
     const wolves = n.ents.filter((e) => e.k === 'lobo' && !e.gone);
     if (!wolves.length) return null;
-    const cx = x + 0.5, cy = y + 0.5;
     let hit = null, bd = 1.6;
     for (const e of wolves) { const d = Math.hypot(e.x - cx, e.y - cy); if (d < bd) { bd = d; hit = e; } }
     if (!hit && !wolves.some((e) => Math.hypot(e.x - cx, e.y - cy) < 6)) return null;
@@ -442,7 +498,7 @@
     while (budget > 1e-6 && e.path && e.pathI < e.path.length && guard++ < 24) {
       const idx = e.path[e.pathI];
       const tx = (idx % w.W) + 0.5, ty = ((idx / w.W) | 0) + 0.5;
-      if (w.block[idx] || (wolf && (w.slow[idx] || (e.state !== 'embora' && repelAt(S, tx, ty))))) { e.path = null; break; }
+      if (w.block[idx] || (wolf && (w.slow[idx] || (e.k === 'lobo' && w.fence && w.fence[idx]) || (e.state !== 'embora' && repelAt(S, tx, ty))))) { e.path = null; break; }
       const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy);
       const cost = C.COST[w.tile[idx]] * (w.slow[idx] ? 2 : 1);
       const can = budget / cost;
@@ -456,15 +512,16 @@
   N.step = function (S, dt) {
     const n = S.narr;
     if (!n || !n.ents.length) return;
-    if (S.safe && n.ents.some((e) => e.k === 'lobo')) {
-      // com o jogo fechado os lobos vão embora sem ninguém ver
-      n.ents = n.ents.filter((e) => e.k !== 'lobo');
+    if (S.safe && n.ents.some((e) => e.k === 'lobo' || e.k === 'onca')) {
+      // com o jogo fechado os lobos e a onça vão embora sem ninguém ver
+      n.ents = n.ents.filter((e) => e.k !== 'lobo' && e.k !== 'onca');
       if (n.active.lobos) finish(S, 'lobos');
+      if (n.active.onca) finish(S, 'onca');
     }
     for (const e of n.ents) {
       if (e.gone) continue;
       e.px = e.x; e.py = e.y;
-      if (e.k === 'lobo') wolfStep(S, e, dt); else visitorStep(S, e, dt);
+      if (e.k === 'lobo') wolfStep(S, e, dt); else if (e.k === 'onca') oncaStep(S, e, dt); else visitorStep(S, e, dt);
     }
     n.ents = n.ents.filter((e) => !e.gone);
     for (const gid of Object.keys(n.groups)) {
@@ -472,6 +529,7 @@
       if (g.state !== 'vindo' && g.state !== 'esperando' && !n.ents.some((e) => e.gid === g.id)) delete n.groups[gid];
     }
     if (n.active.lobos && !n.ents.some((e) => e.k === 'lobo')) finish(S, 'lobos');
+    if (n.active.onca && !n.ents.some((e) => e.k === 'onca')) finish(S, 'onca');
   };
 
   // ---------- lobos ----------
@@ -491,11 +549,15 @@
   N.safeSpot = function (S, p) { return !!(p.inTent || p.carriedBy || repelAt(S, p.x, p.y)); };
   N.wolvesOut = (S) => !!(S.narr && S.narr.ents.some((e) => e.k === 'lobo' && e.state !== 'embora'));
   N.wolvesNear = (S, x, y, r) => !!(S.narr && S.narr.ents.some((e) => e.k === 'lobo' && e.state !== 'embora' && Math.hypot(e.x - x, e.y - y) < r));
-  // perigo para a IA: lobo por perto e a pessoa fora de abrigo
+  // Etapa 9: feras por perto (lobos, ou a onça fora da toca)
+  const prowling = (e) => (e.k === 'lobo' && e.state !== 'embora') || (e.k === 'onca' && e.state !== 'embora' && e.state !== 'toca');
+  N.oncaOut = (S) => !!(S.narr && S.narr.ents.some((e) => e.k === 'onca' && prowling(e)));
+  N.beastsOut = (S) => !!(S.narr && S.narr.ents.some(prowling));
+  // perigo para a IA: lobo (ou onça) por perto e a pessoa fora de abrigo
   N.threat = function (S, p) {
     const n = S.narr;
     if (!n || !n.ents.length || p.carriedBy || N.safeSpot(S, p)) return null;
-    for (const e of n.ents) if (e.k === 'lobo' && e.state !== 'embora' && Math.hypot(e.x - p.x, e.y - p.y) < C.LOBO_SEE) return e;
+    for (const e of n.ents) if (prowling(e) && Math.hypot(e.x - p.x, e.y - p.y) < (e.k === 'onca' ? C.ONCA_SEE : C.LOBO_SEE)) return e;
     return null;
   };
   function guarded(S, p) {
@@ -515,6 +577,7 @@
     const cap = biteCap(S);
     for (const p of S.people) {
       if (!p.alive || p.carriedBy || Fam().age(S, p) < 12 || N.safeSpot(S, p) || guarded(S, p) || bitten(S, p) >= cap) continue;
+      if (e.skip && e.skip[p.id] > S.t) continue;   // do outro lado da cerca: o lobo desiste um tempo
       const d = Math.hypot(p.x - e.x, p.y - e.y);
       if (d < bd) { bd = d; best = p; }
     }
@@ -535,14 +598,14 @@
     if (e.state === 'embora') return;
     e.state = 'embora'; e.path = null; e.leftAt = e.t;
   }
-  // caminho de lobo: não pisa em obra nem na luz do fogo
+  // caminho de lobo: não pisa em obra nem na luz do fogo, nem passa a cerca (Etapa 10; a onça pula)
   const heap = new G.Heap();
   let gB = null, fB = null, sB = null, cB = null, stp = 0;
   function wolfRoute(S, e, test, maxCost) {
     const w = S.world, n = w.W * w.H;
     if (!gB || gB.length !== n) { gB = new Float32Array(n); fB = new Int32Array(n); sB = new Uint32Array(n); cB = new Uint32Array(n); stp = 0; }
     stp++; heap.clear();
-    const start = Math.floor(e.y) * w.W + Math.floor(e.x);
+    const start = Math.floor(e.y) * w.W + Math.floor(e.x), fence = e.k === 'lobo' ? w.fence : null;
     gB[start] = 0; sB[start] = stp; heap.push(0, start);
     while (heap.size()) {
       const cur = heap.pop();
@@ -562,6 +625,7 @@
         const ni = ny * w.W + nx;
         if (w.block[ni] || w.slow[ni]) continue;
         if (dx && dy && (w.block[cy * w.W + nx] || w.block[ny * w.W + cx])) continue;
+        if (fence && (fence[ni] || (dx && dy && (fence[cy * w.W + nx] || fence[ny * w.W + cx])))) continue;
         if (repelAt(S, nx + 0.5, ny + 0.5)) continue;
         const ng = gc + (dx && dy ? Math.SQRT2 : 1) * C.COST[w.tile[ni]];
         if (ng > maxCost) continue;
@@ -602,12 +666,16 @@
       case 'atacar': {
         const p = Fam().person(S, e.target);
         if (!p || !p.alive || N.safeSpot(S, p) || guarded(S, p) || bitten(S, p) >= biteCap(S)) { e.state = 'rondar'; e.path = null; break; }
-        if (Math.hypot(p.x - e.x, p.y - e.y) <= 1.25) { e.path = null; bite(S, e, p); break; }
+        if (Math.hypot(p.x - e.x, p.y - e.y) <= 1.5) { e.path = null; bite(S, e, p); break; }   // 1,5: alcança também na diagonal
         if (!e.path || S.t - e.repath >= 8) {
           e.repath = S.t;
           const px = Math.floor(p.x), py = Math.floor(p.y);
           const r = wolfRoute(S, e, (i) => Math.max(Math.abs(i % w.W - px), Math.abs(((i / w.W) | 0) - py)) <= 1, 70);
-          if (r) setPath(e, r); else { e.state = 'rondar'; e.path = null; }
+          if (r) setPath(e, r);
+          else {
+            e.state = 'rondar'; e.path = null;
+            if (S.campo && S.campo.fences > 0) (e.skip || (e.skip = {}))[p.id] = S.t + 30;   // cercado: não fica tentando a cada passo
+          }
         }
         break;
       }
@@ -646,13 +714,193 @@
     e.dir = Math.abs(p.x - e.x) > Math.abs(p.y - e.y) ? (p.x > e.x ? 2 : 3) : (p.y > e.y ? 0 : 1);
     Sm.addMem(S, p, 'mordido');
     if (a) { a.bites++; if (a.hurt.indexOf(p.id) < 0) { a.hurt.push(p.id); Sm.toast(S, 'Um lobo atacou ' + p.name + '!', 'bad'); } }
-    S.events.push({ k: 'bite', x: p.x, y: p.y });
+    S.events.push({ k: 'bite', x: p.x, y: p.y, pid: p.id });
     Sm.say(S, p, 'Socorro!', true);
     // quem foi atacado acorda e corre para o abrigo (e reza)
     if (p.act && p.act.type === 'fugir') p.sleeping = false;
     else if (p.act) G.AI.abort(S, p);
     G.God.cry(S, p, 'lobos');
-    if (e.bites >= C.LOBO_BITES) goAway(S, e);
+    // Etapa 9: quem tem lança revida, e quem está perto e armado vem ajudar
+    if (G.Bichos) { const tgt = { kind: 'narr', id: e.id }; G.Bichos.fightBack(S, p, tgt); if (!e.gone && e.state !== 'embora') G.Bichos.alarm(S, p, tgt); }
+    if (!e.gone && e.bites >= C.LOBO_BITES) goAway(S, e);
+  }
+
+  // ---------- luta (Etapa 9): um acerto no lobo ou na onça ----------
+  N.hitEnt = function (S, e, p) {
+    const n = S.narr, Sm = Sim();
+    // no lobo, um golpe em cheio (LOBO_KILL) derruba de uma vez; senão ele foge ferido
+    e.hp = (e.hp === undefined ? (e.k === 'onca' ? C.ONCA_HP : C.LOBO_HP) : e.hp) - (e.k === 'lobo' && S.rng.chance(C.LOBO_KILL) ? 2 : 1);
+    const bow = G.Tech && G.Tech.known(S, 'arco');
+    if (e.k === 'lobo') {
+      const a = n.active.lobos;
+      if (a) a.fought = (a.fought || 0) + 1;
+      if (e.hp <= 0) {
+        e.gone = true;
+        if (a) a.killed++;
+        S.stats.wolvesKilled = (S.stats.wolvesKilled || 0) + 1;
+        if (S.stats.wolvesKilled === 1) Sm.chron(S, p.name + ' enfrentou um lobo e o derrubou ' + (bow ? 'com uma flecha.' : 'com a lança.'));
+        else Sm.toast(S, p.name + ' derrubou um lobo.', 'good');
+        for (const o of n.ents) if (o.k === 'lobo' && !o.gone) goAway(S, o);   // o resto da matilha foge
+        return 'morto';
+      }
+      goAway(S, e);
+      return 'fugiu';
+    }
+    if (e.k === 'onca') {
+      const a = n.active.onca;
+      if (a) a.fought = (a.fought || 0) + 1;
+      if (e.hp <= 0) {
+        e.gone = true;
+        if (a) a.killedBy = p.name;
+        S.stats.oncasKilled = (S.stats.oncasKilled || 0) + 1;
+        S.stock.carne += C.ONCA_CARNE; S.stock.couro += C.ONCA_COURO;
+        Sm.float(S, e.x, e.y, '+' + C.ONCA_CARNE + ' carne +' + C.ONCA_COURO + ' couro');
+        Sm.toast(S, p.name + ' venceu a onça!', 'good');
+        for (const q of S.people) if (q.alive && Math.hypot(q.x - e.x, q.y - e.y) < 10) Sm.addMem(S, q, 'vencemos');
+        if (G.Life) G.Life.party(S, 'onca', { name: p.name });
+        return 'morto';
+      }
+      if (e.state === 'acuada') return 'ferido';   // acuada, briga até o fim (ou até achar uma brecha e escapar)
+      if (e.hp <= 1) goAway(S, e); else toDen(S, e);   // ferida, some na mata; muito ferida, vai embora de vez
+      return 'fugiu';
+    }
+    return 'fugiu';
+  };
+
+  // ---------- onça (Etapa 9) ----------
+  // chega de noite, ronda fora da luz do fogo e espera alguém sozinho no escuro; dá um bote (um por noite), fica na
+  // luta um tempo e volta para a toca na mata; de dia some. Depois de 2 ou 3 noites, vai embora (ou cai na luta)
+  function spawnOnca(S) {
+    const spot = edgeSpot(S, 18, 24), den = edgeSpot(S, 14, 20);   // a toca, na mata perto (a meio dia de caminhada)
+    if (!spot) return 0;
+    newEnt(S, 'onca', spot.x, spot.y, { hp: C.ONCA_HP, den: den ? den.i : spot.i, ring: S.rng.next() * Math.PI * 2, bites: 0 });
+    return 1;
+  }
+  const nightOf = (S) => Math.floor((S.t - 12 * 60) / D());   // a noite vai das 19 h às 5 h da manhã seguinte
+  function toDen(S, e) {
+    e.state = 'toca'; e.target = 0;
+    const d0 = Math.floor(S.t / D()) * D();
+    e.back = (S.ck.hour >= 12 ? d0 + D() : d0) + 19 * 60 + Math.round(S.rng.next() * 90);
+    const den = e.den;
+    const r = wolfRoute(S, e, (i) => i === den, 400);
+    setPath(e, r);
+    if (!r) e.hidden = true;
+  }
+  function oncaPrey(S, e) {
+    if (e.bitNight === nightOf(S)) return null;
+    let best = null, bd = C.ONCA_SEE * 2.2;
+    for (const p of S.people) {
+      if (!p.alive || p.carriedBy || Fam().age(S, p) < 12 || N.safeSpot(S, p) || guarded(S, p)) continue;
+      const d = Math.hypot(p.x - e.x, p.y - e.y);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
+  function oncaBite(S, e, p) {
+    if (S.t < (p.biteCool || 0)) return;
+    const a = S.narr.active.onca, Sm = Sim();
+    p.biteCool = S.t + C.LOBO_BITE_MIN;
+    const dmg = C.ONCA_BITE * N.kind(S).sev * (G.Tech ? G.Tech.biteMult(S, p) : 1);
+    p.needs.saude -= dmg;
+    p.dmg.onca = (p.dmg.onca || 0) + dmg;
+    e.bitNight = nightOf(S); e.bites++;
+    e.dir = Math.abs(p.x - e.x) > Math.abs(p.y - e.y) ? (p.x > e.x ? 2 : 3) : (p.y > e.y ? 0 : 1);
+    Sm.addMem(S, p, 'atacadoBicho');
+    if (a) { a.bites++; if (a.hurt.indexOf(p.id) < 0) a.hurt.push(p.id); }
+    Sm.toast(S, 'A onça atacou ' + p.name + '!', 'bad');
+    S.events.push({ k: 'bite', x: p.x, y: p.y, sp: 'onca', pid: p.id });
+    S.events.push({ k: 'roar' });
+    Sm.say(S, p, 'Socorro!', true);
+    if (p.act && p.act.type === 'fugir') p.sleeping = false;
+    else if (p.act) G.AI.abort(S, p);
+    G.God.cry(S, p, 'onca');
+    // fica um tempo na luta (é quando o povo pode acertar), depois volta para a toca
+    e.state = 'luta'; e.lutaUntil = S.t + 20; e.path = null;
+    if (G.Bichos) { const tgt = { kind: 'narr', id: e.id }; G.Bichos.fightBack(S, p, tgt); if (!e.gone && e.state === 'luta') G.Bichos.alarm(S, p, tgt); }
+  }
+  // caçada (Etapa 9): os caçadores chegaram na toca e acharam a onça
+  N.corner = function (S, e, p) {
+    if (e.state !== 'toca') return;
+    e.state = 'acuada'; e.hidden = false; e.path = null;
+    e.acuadaUntil = S.t + C.ONCA_ACUADA; e.nextBite = S.t + C.ONCA_POUNCE_MIN * 0.75; e.lastNear = S.t;
+    e.dir = p.x > e.x ? 2 : 3;
+    Sim().toast(S, p.name + ' achou a onça na toca!', 'warn');
+    S.events.push({ k: 'roar' });
+  };
+  // acuada, a onça dá um bote em quem está mais perto
+  function oncaPounce(S, e, p) {
+    const a = S.narr.active.onca, Sm = Sim();
+    const dmg = C.ONCA_BITE * C.ONCA_POUNCE * N.kind(S).sev * (G.Tech ? G.Tech.biteMult(S, p) : 1);
+    p.needs.saude -= dmg;
+    p.dmg.onca = (p.dmg.onca || 0) + dmg;
+    e.dir = p.x > e.x ? 2 : 3;
+    Sm.addMem(S, p, 'atacadoBicho');
+    if (a) { a.pounced = a.pounced || []; if (a.pounced.indexOf(p.id) < 0) { a.pounced.push(p.id); Sm.toast(S, 'A onça pulou em cima de ' + p.name + '!', 'bad'); } }
+    S.events.push({ k: 'bite', x: p.x, y: p.y, sp: 'onca', pid: p.id });
+    S.events.push({ k: 'roar' });
+    Sm.say(S, p, S.rng.pick(['Ai!', 'Segura ela!', 'Me acertou!']), true);
+    G.God.cry(S, p, 'onca');
+    if (G.Bichos) G.Bichos.fightBack(S, p, { kind: 'narr', id: e.id, hunt: true });
+  }
+  function oncaStep(S, e, dt) {
+    e.t += dt;
+    const a = S.narr.active.onca, hr = S.ck.hour, night = hr >= 19 || hr < 5.5, w = S.world;
+    if (e.state !== 'embora' && e.state !== 'acuada' && (!a || S.t >= a.until)) goAway(S, e);
+    else if (e.state !== 'embora' && e.state !== 'toca' && e.state !== 'luta' && e.state !== 'acuada' && (!night || repelAt(S, e.x, e.y))) toDen(S, e);
+    switch (e.state) {
+      case 'toca':
+        if (night && S.t >= (e.back || 0)) { e.state = 'rondar'; e.path = null; e.hidden = false; }
+        else if (!e.path) e.hidden = true;
+        // de manhã, depois de um ataque, o povo vai atrás dela (uma vez)
+        if (G.Bichos && !e.hunted && e.bites > 0 && e.hidden && hr >= C.ONCA_HUNT_H[0] && hr < C.ONCA_HUNT_H[1]) G.Bichos.oncaHunt(S, e);
+        break;
+      case 'acuada': {
+        // acuada na toca: dá botes em quem chega perto; se os caçadores recuam (ou a luta demora demais), escapa e vai embora de vez
+        if (S.people.some((q) => q.alive && q.act && q.act.type === 'defender' && q.act.tgt && q.act.tgt.id === e.id && Math.hypot(q.x - e.x, q.y - e.y) <= C.ONCA_POUNCE_R + 2)) e.lastNear = S.t;
+        if (S.t >= e.acuadaUntil || S.t - (e.lastNear || 0) > 10) { goAway(S, e); if (a) a.escaped = true; break; }
+        if (S.t >= (e.nextBite || 0)) {
+          // o bote vai num dos caçadores que estão perto (não sempre no mesmo); criança, nunca
+          const near = S.people.filter((p) => p.alive && !p.carriedBy && Fam().age(S, p) >= 12 && Math.hypot(p.x - e.x, p.y - e.y) < C.ONCA_POUNCE_R);
+          const hunters = near.filter((p) => p.act && p.act.type === 'defender');
+          e.nextBite = S.t + C.ONCA_POUNCE_MIN;
+          if (near.length) oncaPounce(S, e, S.rng.pick(hunters.length ? hunters : near));
+        }
+        break;
+      }
+      case 'vindo':
+      case 'rondar': {
+        const p = oncaPrey(S, e);
+        if (p) { e.state = 'atacar'; e.target = p.id; e.path = null; e.repath = -1e9; break; }
+        if (!e.path) routeRing(S, e);
+        break;
+      }
+      case 'atacar': {
+        const p = Fam().person(S, e.target);
+        if (!p || !p.alive || N.safeSpot(S, p) || guarded(S, p) || e.bitNight === nightOf(S)) { e.state = 'rondar'; e.path = null; break; }
+        if (Math.hypot(p.x - e.x, p.y - e.y) <= 1.5) { e.path = null; oncaBite(S, e, p); break; }
+        if (!e.path || S.t - e.repath >= 6) {
+          e.repath = S.t;
+          const px = Math.floor(p.x), py = Math.floor(p.y);
+          const r = wolfRoute(S, e, (i) => Math.max(Math.abs(i % w.W - px), Math.abs(((i / w.W) | 0) - py)) <= 1, 70);
+          if (r) setPath(e, r); else { e.state = 'rondar'; e.path = null; }
+        }
+        break;
+      }
+      case 'luta':
+        if (S.t >= e.lutaUntil) toDen(S, e);
+        break;
+      case 'embora': {
+        e.hidden = false;
+        if (!e.path) {
+          const c = camp(S), d = Math.hypot(e.x - c.x, e.y - c.y);
+          if (d > 18 || e.t - (e.leftAt || e.t) > 180) { e.gone = true; break; }
+          const r = wolfRoute(S, e, (i) => Math.hypot(i % w.W - c.x, ((i / w.W) | 0) - c.y) > 19, 140);
+          if (r) setPath(e, r); else e.gone = true;
+        }
+        break;
+      }
+    }
+    if (!e.gone && !e.hidden && e.state !== 'luta' && e.state !== 'acuada') entMove(S, e, dt, e.state === 'embora' || e.state === 'toca' ? C.ONCA_SPEED * 1.1 : C.ONCA_SPEED, e.state !== 'toca');
   }
   function steal(S, e) {
     const st = S.stock, a = S.narr.active.lobos;
@@ -739,7 +987,11 @@
     const n = S.narr;
     g.state = 'esperando';
     const pds = describeGroup(S, g), Sm = Sim();
-    if (g.kind === 'casal') {
+    if (g.kind === 'mascate') {
+      // Etapa 10: o mascate mostra os bichos e diz o que quer em troca
+      const o = g.offer, txt = 'Chegou um mascate, ' + (pds[0] ? pds[0].name : '') + ', com ' + G.Campo.animalsText(o.sp, o.m, o.f) + ' para trocar.';
+      if (!S.stats.mascateSeen) { S.stats.mascateSeen = true; Sm.chron(S, txt); } else Sm.toast(S, txt, '');
+    } else if (g.kind === 'casal') {
       const mom = pds.find((p) => p.role === 'mae'), dad = pds.find((p) => p.role === 'pai'), kid = pds.find((p) => p.role === 'filho');
       Sm.chron(S, 'Chegou um casal pedindo abrigo: ' + (mom ? mom.name : '') + ' e ' + (dad ? dad.name : '') +
         (kid ? ', com ' + (kid.sex === 'F' ? 'a filha ' : 'o filho ') + kid.name + ', de ' + kid.age + ' anos' : '') + '.');
@@ -757,13 +1009,26 @@
   N.groupInfo = function (S, gid) {
     const n = S.narr, g = n && n.groups[gid];
     if (!g) return null;
-    return { id: g.id, kind: g.kind, people: describeGroup(S, g) };
+    return { id: g.id, kind: g.kind, people: describeGroup(S, g), offer: g.offer || null };
   };
   N.decide = function (S, gid, accept) {
     const n = S.narr, g = n && n.groups[gid];
     if (!g || g.state !== 'esperando') return false;
     const ents = g.ents.map((id) => n.ents.find((x) => x.id === id)).filter(Boolean);
     const Sm = Sim(), F = Fam();
+    if (g.kind === 'mascate') {
+      // Etapa 10: troca (paga e recebe os bichos, que vão para o curral) ou dispensa; o mascate segue viagem
+      const e = ents[0], o = g.offer, Ca = G.Campo;
+      const ok = !!(accept && Ca && Ca.trade(S, o, e ? e.x : S.camp.x + 1, e ? e.y : S.camp.y + 1));
+      g.traded = ok;   // os bichos já foram para o curral: o mascate segue sozinho
+      if (ok) Sm.toast(S, 'Troca feita: ' + Ca.payText(o.pay) + ' por ' + Ca.animalsText(o.sp, o.m, o.f) + '.', 'good');
+      else if (accept) Sm.toast(S, 'A troca não deu: faltou o que pagar, ou lugar no curral. O mascate seguiu viagem.', 'warn');
+      else Sm.toast(S, 'O mascate seguiu viagem.', '');
+      for (const x of ents) { x.state = 'indo'; x.path = null; x.leftAt = x.t; }
+      g.state = 'indo';
+      S.events.push({ k: 'narr', ev: 'mascate', on: false });
+      return true;
+    }
     if (accept) {
       const made = [];
       for (const e of ents) {
@@ -799,6 +1064,17 @@
     return true;
   };
 
+  // Etapa 10: o mascate vem pela trilha como os viajantes, tocando os bichos que quer trocar
+  N.spawnMascate = function (S, offer) {
+    const pd = visitorData(S, 'M', rint(S, 30, 55), 'mascate', new Set());
+    const g = spawnGroup(S, 'mascate', [pd]);
+    if (!g) return null;
+    g.offer = offer;
+    Sim().toast(S, 'Um mascate vem pela trilha, tocando ' + G.Campo.animalsText(offer.sp, offer.m, offer.f) + '.', '');
+    S.events.push({ k: 'narr', ev: 'mascate', on: true });
+    return g;
+  };
+
   // segundo casal: marcado no 18º aniversário do primogênito
   N.onAdult = function (S, p, soon) {
     const n = S.narr;
@@ -830,16 +1106,20 @@
       return h >= 36 ? Math.ceil(h / 24) + ' dias' : h >= 20 ? 'até amanhã' : Math.max(1, Math.round(h)) + ' h';
     };
     const a = n.active;
+    if (a.onca) {
+      const hunting = S.people.some((p) => p.alive && p.act && p.act.type === 'defender' && p.act.tgt && p.act.tgt.hunt);
+      return { k: 'onca', text: hunting ? 'Caçada à onça' : N.oncaOut(S) ? 'Onça rondando' : 'Onça por perto · ' + left(a.onca.until), tone: 'bad' };
+    }
     if (a.lobos || N.wolvesOut(S)) return { k: 'lobos', text: 'Lobos rondando', tone: 'bad' };
     if (a.nevasca) return { k: 'nevasca', text: 'Nevasca · ' + left(a.nevasca.until), tone: 'bad' };
     if (a.tempestade) return { k: 'tempestade', text: 'Tempestade · ' + left(a.tempestade.until), tone: 'bad' };
     if (a.seca) return { k: 'seca', text: 'Seca · ' + left(a.seca.until), tone: 'bad' };
     if (n.plan && n.plan.warned && WARN[n.plan.k]) {
-      const soon = { nevasca: 'Nevasca chegando', lobos: 'Uivos na mata', tempestade: 'Tempestade chegando' }[n.plan.k];
+      const soon = { nevasca: 'Nevasca chegando', lobos: 'Uivos na mata', tempestade: 'Tempestade chegando', onca: 'Pegadas de onça' }[n.plan.k];
       return { k: n.plan.k, text: soon, tone: 'warn' };
     }
     const g = Object.values(n.groups).find((x) => x.state === 'vindo' || x.state === 'esperando');
-    if (g) return { k: 'andarilho', text: g.kind === 'casal' ? 'Viajantes chegando' : 'Andarilho chegando', tone: 'good' };
+    if (g) return g.kind === 'mascate' ? { k: 'mascate', text: 'Mascate chegando', tone: 'good' } : { k: 'andarilho', text: g.kind === 'casal' ? 'Viajantes chegando' : 'Andarilho chegando', tone: 'good' };
     if (a.fartura) return { k: 'fartura', text: 'Fartura · ' + left(a.fartura.until), tone: 'good' };
     if (a.piracema) return { k: 'piracema', text: 'Piracema · ' + left(a.piracema.until), tone: 'good' };
     if (a.veranico) return { k: 'veranico', text: 'Veranico · ' + left(a.veranico.until), tone: 'good' };

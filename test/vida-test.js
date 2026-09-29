@@ -10,7 +10,7 @@ const path = require('path');
 const fs = require('fs');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 globalThis.G = {};
-for (const f of ['core', 'config', 'world', 'sim', 'family', 'life', 'tech', 'invencoes', 'obras', 'fauna', 'ai', 'god', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
+for (const f of ['core', 'config', 'world', 'sim', 'family', 'life', 'tech', 'invencoes', 'obras', 'fauna', 'bichos', 'campo', 'ai', 'god', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
 const { W, Sim, CFG: C, Family: F, God, Save, AI, Tech: T, Life: L } = G;
 const Y = 60 * 1440, D = 1440;
 
@@ -154,9 +154,59 @@ if (isMainThread) {
     const opp = F.partners(S2, hub).filter((q) => q.sex !== hub.sex).length, same = F.partners(S2, hub).filter((q) => q.sex === hub.sex).length;
     const maxOpp = Math.max(...S2.people.map((q) => F.partners(S2, q).filter((r) => r.sex !== q.sex).length));
     const maxSame = Math.max(...S2.people.map((q) => F.partners(S2, q).filter((r) => r.sex === q.sex).length));
-    check('limites: até 4 pares do outro sexo e 1 do mesmo sexo', maxOpp <= C.BONDS_MAX && maxSame <= C.BONDS_SAME_MAX && opp >= 2, 'Aruã: ' + opp + ' do outro sexo, ' + same + ' do mesmo · máximos ' + maxOpp + '/' + maxSame);
+    check('limites: até ' + C.BONDS_MAX + ' pares do outro sexo e ' + C.BONDS_SAME_MAX + ' do mesmo sexo', maxOpp <= C.BONDS_MAX && maxSame <= C.BONDS_SAME_MAX && opp >= 2, 'Aruã: ' + opp + ' do outro sexo, ' + same + ' do mesmo · máximos ' + maxOpp + '/' + maxSame);
     const womenFert = S2.people.filter((q) => q.sex === 'F' && F.age(S2, q) <= C.FERTILE_MAX);
     check('com tempo, toda mulher em idade de ter filho acha um par homem', womenFert.every((q) => F.partners(S2, q).some((r) => r.sex === 'M')), womenFert.filter((q) => !F.partners(S2, q).some((r) => r.sex === 'M')).map((q) => q.name).join(', ') || 'todas');
+  }
+  // 5b. noites picantes (0.10): só adultos, sem parentes, e desliga no menu
+  {
+    // noite a três: Aruã tem dois pares dormindo na mesma casa, e as duas se conhecem
+    const trioNights = (S, a, b, c, nights) => {
+      const tent = S.buildings.find((x) => x.type === 'barraca');
+      for (let n = 0; n < nights; n++) {
+        for (const q of [a, b, c]) { q.sleeping = true; q.inTent = tent.id; q.mood = 80; }
+        S.t = Math.floor(S.t / D) * D + D + 23 * 60; S.ck = Sim.clock(S.t);
+        F.hourly(S);
+        S.events.length = 0;
+      }
+      return S.stats.trios || 0;
+    };
+    const mk = (seed, ageC, kin, off) => {
+      const S = world(seed);
+      const [w, m] = S.people;
+      const c = add(S, 'F', 'Jaci', ageC);
+      if (kin) { w.mother = 777; c.mother = 777; }   // Iara e Jaci filhas da mesma mãe
+      F.link(S, m, c, 70);
+      w.rel[c.id] = c.rel[w.id] = 10;
+      if (off) S.opts = { picante: false };
+      return { S, w, m, c };
+    };
+    let t = mk(42, 24);
+    let n = trioNights(t.S, t.w, t.m, t.c, 60);
+    check('noite a três: quem tem dois pares na mesma casa, e os dois se conhecem, passa a noite a três (e a Crônica conta a primeira)', n > 0 && t.S.chron.some((x) => /primeira noite a três/.test(x.text)) && t.m.mem.some((x) => x.k === 'noiteTres'), n + ' noites em 60');
+    t = mk(42, 24, false, true);
+    check('com as noites picantes desligadas no menu, nada', trioNights(t.S, t.w, t.m, t.c, 60) === 0);
+    t = mk(42, 16);   // 16 anos: em 60 noites (um ano de jogo) chega a 17, nunca a 18
+    t.c.bonds = {}; t.m.bonds[t.c.id] = 70; t.c.bonds[t.m.id] = 70;   // à força, mesmo sem idade para ter par
+    check('menor de idade nunca entra (mesmo com o laço forçado)', trioNights(t.S, t.w, t.m, t.c, 60) === 0 && F.age(t.S, t.c) < 18, 'idade ' + F.age(t.S, t.c));
+    t = mk(42, 24, true);
+    check('parentes próximos nunca (as duas são irmãs)', F.closeKin(t.S, t.w, t.c) && trioNights(t.S, t.w, t.m, t.c, 60) === 0);
+    // depois da festa: adultos ligados por pares esticam a noite juntos
+    const S = world(777);
+    const [a, b] = S.people;
+    const c = add(S, 'F', 'Maíra', 26), d = add(S, 'M', 'Kauê', 28), kid = add(S, 'M', 'Tupã', 16), e = add(S, 'F', 'Jurema', 30);
+    F.link(S, b, c, 70); F.link(S, c, d, 70); F.link(S, d, e, 70);
+    for (const q of S.people) q.mood = 85;
+    const was = C.PARTY_MANY; C.PARTY_MANY = 1;
+    const g = F.afterParty(S, [a, b, c, d, e, kid]);
+    check('depois da festa, um grupo de adultos ligados por pares estica a noite (e a Crônica conta a primeira, sem detalhes)', g && g.length >= 4 && S.chron.some((x) => /primeira noite de muitos/.test(x.text)), g ? g.map((q) => q.name).join(', ') : 'ninguém');
+    check('quem tem menos de 18 anos fica de fora, sempre', g && g.indexOf(kid) < 0 && g.every((q) => F.age(S, q) >= 18));
+    S.opts = { picante: false };
+    check('desligado no menu, a festa acaba na festa', F.afterParty(S, [a, b, c, d, e]) === null);
+    S.opts = {}; S.safe = true;
+    check('e com o jogo fechado também não', F.afterParty(S, [a, b, c, d, e]) === null);
+    S.safe = false;
+    C.PARTY_MANY = was;
   }
   // 6. separação: sem convivência, o afeto esfria até zero e o par se desfaz em paz
   {
@@ -508,6 +558,7 @@ if (isMainThread) {
   }
 
   console.log('\nunidades: ' + ok + ' ok, ' + bad + ' falhas');
+  if (process.argv[2] === 'u') { process.exitCode = bad ? 1 : 0; return; }   // só as unidades
   // ===================== longo =====================
   const YEARS = +process.argv[2] || 20;
   const jobs = [];
@@ -533,7 +584,7 @@ if (isMainThread) {
       console.log(`\nmundo ${r.seed} · ${r.mode} · ${r.sec.toFixed(0)} s · ${r.alive} vivos · nasceram ${r.births} · mães ${r.mothers} (${r.multiDad} com filhos de pais diferentes) · pares ${r.bonds} (separações ${r.seps})`);
       console.log(`  histórias ${r.stories} · festas ${r.parties} · conversas ${r.talks} · brigas ${r.fights} · pazes ${r.peace} · consolos ${r.consoled} · ensinou ${r.taught} · pequenos acontecimentos ${r.small}`);
       console.log(`  tempo: trabalho ${r.workPct}% · conversa ${r.chatPct}% · história ${r.storyPct}% · festa ${r.partyPct}% · dormir ${r.sleepPct}% · fome ${r.hungry}% · frio ${r.cold}% · Poder ${r.poder} (agradecimentos +${r.thanksPoder})`);
-      console.log(`  mortes: ${r.deaths.length ? r.deaths.join(', ') : 'nenhuma'} · no máximo ${r.maxBonds} pares numa pessoa`);
+      console.log(`  mortes: ${r.deaths.length ? r.deaths.join(', ') : 'nenhuma'} · no máximo ${r.maxBonds} pares numa pessoa (do mesmo sexo, no fim: até ${r.sameMax}) · noites a três ${r.trios} · noites de muitos ${r.many}`);
       const tag = 'mundo ' + r.seed + ' ' + r.mode + ': ';
       check(tag + 'ninguém morre de fome, sede ou frio', !r.deaths.some((c) => c === 'fome' || c === 'sede' || c === 'frio'), r.deaths.join(', ') || 'nenhuma morte');
       check(tag + 'fome e frio raros', r.hungry < 5 && r.cold < 3, r.hungry + '% · ' + r.cold + '%');
@@ -602,6 +653,8 @@ function longRun(seed, mode, years) {
     workPct: pct(AI.WORK), chatPct: pct(['conversar']), storyPct: pct(['historia', 'ouvir']), partyPct: pct(['festa']), sleepPct: pct(['dormir']),
     hungry: (hungry / Math.max(1, hours) * 100).toFixed(1), cold: (cold / Math.max(1, hours) * 100).toFixed(1),
     poder: Math.round(S.god.poder), thanksPoder: Math.round(S.god.thanksPoder || 0), sec: (Date.now() - t0) / 1000,
+    trios: st.trios || 0, many: st.manyNights || 0,
+    sameMax: Math.max(0, ...S.people.filter((p) => p.alive).map((p) => F.partners(S, p).filter((q) => q.sex === p.sex).length)),
   });
   return out;
 }

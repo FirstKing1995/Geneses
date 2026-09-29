@@ -8,7 +8,7 @@
 const path = require('path');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 globalThis.G = {};
-for (const f of ['core', 'config', 'world', 'sim', 'family', 'life', 'tech', 'invencoes', 'obras', 'fauna', 'ai', 'god', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
+for (const f of ['core', 'config', 'world', 'sim', 'family', 'life', 'tech', 'invencoes', 'obras', 'fauna', 'bichos', 'campo', 'ai', 'god', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
 const { W, Sim, CFG: C, Family: F, God, Save, AI, Tech: T, Inv: I, Life: L, Obras: O, Fauna: FA } = G;
 const Y = 60 * 1440, D = 1440;
 
@@ -225,6 +225,9 @@ if (isMainThread) {
     days(S, 1);   // o casal se ajeita antes
     S.life.party = null; S.life.lastParty = -1e9;
     L.party(S, 'fartura');
+    // descansados para a festa: o teste é do tambor, não do cansaço (com mais bichos no mundo, o dia muda um pouco)
+    for (let i = 0; i < 360 && S.ck.hour < 17; i++) { Sim.step(S, 2); S.events.length = 0; }
+    for (const q of S.people) q.needs.energia = Math.max(q.needs.energia, 90);
     let drummer = 0, danced = 0, n = 0;
     days(S, 2, (s) => {
       const pt = s.life.party; if (pt && pt.on && pt.drummer) drummer = pt.drummer;
@@ -301,6 +304,7 @@ if (isMainThread) {
   }
 
   console.log('\nunidades: ' + ok + ' ok, ' + bad + ' falhas');
+  if (process.argv[2] === 'u') { process.exitCode = bad ? 1 : 0; return; }   // só as unidades
 
   // ===================== longo =====================
   const YEARS = +process.argv[2] || 20;

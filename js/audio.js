@@ -173,6 +173,34 @@
     tear(t, o, v) { tone('triangle', 520, t, 0.001, 0.04, 0.08 * v, o); noise(t, 0.03, 'bandpass', 1200, 2, 0.001, 0.12 * v, o); tone('triangle', 390, t + 0.16, 0.001, 0.04, 0.06 * v, o); return 0.22; },
     // Etapa 8: a corda do arco e a flecha cortando o ar
     flecha(t, o, v) { tone('triangle', 190, t, 0.001, 0.14, 0.14 * v, o, 110); noise(t + 0.02, 0.16, 'bandpass', 2600, 2, 0.005, 0.16 * v, o, 5200); return 0.2; },
+    // Etapa 9: o esturro da onça (grunhidos graves, cada vez mais juntos), o porco-do-mato, o bote do jacaré e a revoada
+    esturro(t, o, v) {
+      let s = t;
+      for (let i = 0; i < 6; i++) { tone('sawtooth', 96 - i * 4, s, 0.02, 0.2, 0.22 * v, bandOut(o, 340, 1.1), 68); noise(s, 0.2, 'lowpass', 480, 1, 0.02, 0.24 * v, o); s += 0.34 - i * 0.03; }
+      return 2;
+    },
+    grunhido(t, o, v) { for (let i = 0; i < 3; i++) { const s = t + i * 0.14; tone('square', 150 + Math.random() * 30, s, 0.005, 0.08, 0.08 * v, bandOut(o, 600, 2), 110); noise(s, 0.08, 'bandpass', 900, 2, 0.005, 0.15 * v, o); } return 0.5; },
+    bote(t, o, v) { noise(t, 0.5, 'lowpass', 2400, 1, 0.005, 0.5 * v, o, 300); tone('sine', 120, t, 0.002, 0.15, 0.4 * v, o, 50); noise(t + 0.05, 0.03, 'highpass', 3000, 1, 0.001, 0.3 * v, o); return 0.6; },
+    revoada(t, o, v) { for (let i = 0; i < 8; i++) noise(t + i * 0.045, 0.03, 'bandpass', 1800 + Math.random() * 900, 2, 0.002, 0.12 * v, o); tone('sine', 1500, t + 0.05, 0.01, 0.1, 0.03 * v, o, 1900); return 0.45; },
+    // Etapa 10: a enxada na terra, a colheita, os bichos do curral, os gafanhotos e o sininho do mascate
+    enxada(t, o, v) { noise(t, 0.09, 'lowpass', 1100, 1, 0.003, 0.3 * v, o, 350); noise(t + 0.02, 0.05, 'bandpass', 2400, 2, 0.002, 0.08 * v, o); return 0.12; },
+    colheita(t, o, v) { for (let i = 0; i < 5; i++) noise(t + i * 0.07, 0.07, 'bandpass', 1800 + Math.random() * 800, 1.5, 0.01, 0.1 * v, o); [72, 76, 79].forEach((m, i) => pluck(hz(m), t + 0.35 + i * 0.09, 0.5, 0.12 * v, o)); return 0.9; },
+    galo(t, o, v) {
+      // có-có-ri-cóóó: quatro notas subindo e a última comprida caindo
+      const b = bandOut(o, 1300, 1.6), s0 = 560 + Math.random() * 60;
+      [[0, 1, 0.1], [0.14, 1.1, 0.1], [0.3, 1.45, 0.14], [0.5, 1.35, 0.55]].forEach(([dt, k, d], i) => tone('sawtooth', s0 * k, t + dt, 0.01, d, 0.09 * v, b, i === 3 ? s0 * 0.95 : s0 * k * 1.05));
+      return 1.2;
+    },
+    galinha(t, o, v) { const b = bandOut(o, 1100, 2); for (let i = 0; i < 3; i++) tone('square', 480 + Math.random() * 80, t + i * 0.11, 0.004, 0.05, 0.05 * v, b, 380); return 0.4; },
+    porco(t, o, v) { const b = bandOut(o, 750, 3); for (let i = 0; i < 2; i++) tone('sawtooth', 190 + Math.random() * 30, t + i * 0.18, 0.01, 0.12, 0.11 * v, b, 150); return 0.45; },
+    ovelha(t, o, v) {
+      const osc = tone('sawtooth', 330 + Math.random() * 40, t, 0.03, 0.55, 0.08 * v, bandOut(o, 1000, 2), 300);
+      const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = 9; lg.gain.value = 35; l.connect(lg); lg.connect(osc.detune); l.start(t); l.stop(t + 0.7);
+      return 0.7;
+    },
+    vaca(t, o, v) { tone('sawtooth', 118, t, 0.12, 1, 0.14 * v, bandOut(o, 520, 1.4), 150); tone('sawtooth', 236, t + 0.05, 0.12, 0.9, 0.03 * v, bandOut(o, 700, 2), 290); return 1.2; },
+    praga(t, o, v) { for (let i = 0; i < 3; i++) noise(t + i * 0.3, 0.9, 'bandpass', 3200 + i * 400, 4, 0.2, 0.08 * v, o); return 1.8; },
+    sino(t, o, v) { bell(hz(88), t, 0.08 * v, o, 0.8); bell(hz(88), t + 0.22, 0.07 * v, o, 0.8); bell(hz(91), t + 0.44, 0.06 * v, o, 1); return 1.4; },
   };
   function bandOut(o, f, q) { const b = ctx.createBiquadFilter(); b.type = 'bandpass'; b.frequency.value = f; b.Q.value = q; b.connect(o); return b; }
   function crackle(t, o, v) { noise(t, 0.012 + Math.random() * 0.02, 'highpass', 2000 + Math.random() * 3000, 1, 0.001, (0.1 + Math.random() * 0.25) * v, o); }
@@ -246,7 +274,8 @@
     return { g: g * g * zoom, pan: Math.max(-0.8, Math.min(0.8, dx / Math.max(4, halfW))) };
   }
   // toca um efeito: gap mínimo por tipo, limite de vozes, posição
-  const GAP = { serra: 0.3, tear: 0.2, flecha: 0.15, machado: 0.12, pedra: 0.1, martelo: 0.12, agua: 0.2, peixe: 0.3, colher: 0.2, lanca: 0.2, cavar: 0.2, lasca: 0.12, coracao: 1.2, oracao: 0.8, obrigado: 1, briga: 1, meta: 0.4, clique: 0.05, aviso: 1.5, uivo: 4 };
+  const GAP = { serra: 0.3, tear: 0.2, flecha: 0.15, machado: 0.12, pedra: 0.1, martelo: 0.12, agua: 0.2, peixe: 0.3, colher: 0.2, lanca: 0.2, cavar: 0.2, lasca: 0.12, coracao: 1.2, oracao: 0.8, obrigado: 1, briga: 1, meta: 0.4, clique: 0.05, aviso: 1.5, uivo: 4,
+    esturro: 3, grunhido: 0.6, bote: 1, revoada: 0.5, acerto: 0.1, enxada: 0.15, colheita: 0.8, galo: 4, galinha: 1.2, porco: 1.5, ovelha: 2, vaca: 3, praga: 2, sino: 2 };
   A.sfx = function (name, x, y, vol, delay) {
     if (!A.ok() || !pref.on || !SFX[name]) return;
     const now = T();
@@ -254,7 +283,7 @@
     const p = place(x, y);
     if (p.g < 0.04) return;
     lastPlay[name] = now;
-    const wet = { nascimento: 0.5, morte: 0.6, descoberta: 0.4, era: 0.5, cura: 0.5, revelacao: 0.6, oracao: 0.5, atendida: 0.4, obrigado: 0.4, uivo: 0.5, lua: 0.5, canto: 0.4, arcoiris: 0.5, estrela: 0.4 }[name] || 0.1;
+    const wet = { nascimento: 0.5, morte: 0.6, descoberta: 0.4, era: 0.5, cura: 0.5, revelacao: 0.6, oracao: 0.5, atendida: 0.4, obrigado: 0.4, uivo: 0.5, lua: 0.5, canto: 0.4, arcoiris: 0.5, estrela: 0.4, esturro: 0.45 }[name] || 0.1;
     SFX[name](now + 0.02 + (delay || 0), out(bus.sfx, p.pan, wet), p.g * (vol === undefined ? 1 : vol));
   };
   A.ui = function (name) { if (name === 'click') A.sfx('clique'); };
@@ -286,7 +315,12 @@
       case 'fell': A.sfx('queda', e.x + 0.5, e.y + 0.5); break;
       case 'splash': A.sfx('peixe', e.x + 0.5, e.y + 0.5); break;
       case 'throw': A.sfx(e.bow ? 'flecha' : 'lanca', e.x1, e.y1); break;
-      case 'bite': A.sfx('rosnado', e.x, e.y); break;
+      case 'bite': A.sfx(e.sp === 'jacare' ? 'bote' : e.sp === 'porco' || e.sp === 'anta' ? 'grunhido' : 'rosnado', e.x, e.y); break;
+      // Etapa 9: acerto, esturro da onça, investida, revoada
+      case 'hit': A.sfx('acerto', e.x, e.y); break;
+      case 'roar': A.sfx('esturro'); break;
+      case 'beast': A.sfx('grunhido', e.x, e.y); break;
+      case 'birdsUp': A.sfx('revoada', e.x, e.y); break;
       case 'bolt': A.sfx('trovao'); break;
       case 'miracle': A.sfx(e.kind === 'revelacao' ? 'revelacao' : e.kind === 'cura' ? 'cura' : e.kind === 'chuva' ? 'chuva' : 'calor', e.x + 0.5, e.y + 0.5, 1.2); break;
       case 'heart': A.sfx('coracao', e.x + 0.5, e.y + 0.5); break;
@@ -305,7 +339,11 @@
       case 'song': A.sfx('canto', e.x + 0.5, e.y + 0.5); break;
       case 'fireLit': A.sfx('fogo', e.x + 0.5, e.y + 0.5, 0.7); break;
       case 'upgrade': A.sfx('obra', e.x, e.y); break;
-      case 'narr': if (e.on && e.ev === 'lobos') A.sfx('uivo'); else if (e.warn && (e.ev === 'nevasca' || e.ev === 'tempestade')) A.sfx('aviso'); break;
+      case 'narr': if (e.on && e.ev === 'lobos') A.sfx('uivo'); else if (e.on && e.ev === 'mascate') A.sfx('sino'); else if (e.warn && (e.ev === 'nevasca' || e.ev === 'tempestade')) A.sfx('aviso'); break;
+      // Etapa 10
+      case 'harvest': A.sfx('colheita', e.x, e.y); break;
+      case 'praga': A.sfx('praga', e.x, e.y); break;
+      case 'penLoss': A.sfx('rosnado', e.x, e.y); break;
       case 'chron':
         if (/ morreu /.test(e.text || '')) A.sfx('morte');
         else if (/primeira fogueira/.test(e.text || '')) A.sfx('fogo');
@@ -320,7 +358,7 @@
   };
 
   // ---------- ambiente ----------
-  let amb = null, nextChirp = 0, nextCricket = 0, nextOwl = 0, nextFrog = 0, nextCrack = 0, nextHowl = 0, nextWork = 0;
+  let amb = null, nextChirp = 0, nextCricket = 0, nextOwl = 0, nextFrog = 0, nextCrack = 0, nextHowl = 0, nextWork = 0, nextRoar = 0, nextFarm = 0;
   function loopNoise(type, f, q) {
     const s = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), g = ctx.createGain();
     s.buffer = noiseBuf; s.loop = true; fl.type = type; fl.frequency.value = f; fl.Q.value = q || 0.7; g.gain.value = 0;
@@ -350,11 +388,12 @@
   function ambient(st, t) {
     if (!amb) return;
     const s = G.R && G.R.scale ? G.R.scale() : 3, near = Math.min(1, 0.4 + s * 0.2);
-    let hour = 10, season = 0, precip = null, blizzard = false, storm = false, wolves = false;
+    let hour = 10, season = 0, precip = null, blizzard = false, storm = false, wolves = false, onca = false;
     if (st) {
       hour = st.ck.hour; season = st.ck.season; precip = st.precip;
       blizzard = !!(G.Narr && G.Narr.is(st, 'nevasca')); storm = !!(G.Narr && G.Narr.is(st, 'tempestade'));
       wolves = !!(G.Narr && G.Narr.wolvesOut(st));
+      onca = !!(G.Narr && G.Narr.oncaOut && G.Narr.oncaOut(st));
     }
     const night = hour >= 19.5 || hour < 5, dawn = hour >= 5 && hour < 8;
     const a = st ? around(st) : { water: 0.2, fire: 99 };
@@ -390,11 +429,15 @@
     if (night && t > nextOwl && !precip) { nextOwl = t + 25 + Math.random() * 40; if (Math.random() < 0.5) owl(t, out(bus.amb, Math.random() - 0.5, 0.4), 0.7); }
     // lobos rondando: uivos de tempos em tempos
     if (wolves && t > nextHowl) { nextHowl = t + 9 + Math.random() * 12; A.sfx('uivo'); }
+    // a onça rondando no escuro: um esturro de vez em quando, longe
+    if (onca && night && t > nextRoar) { nextRoar = t + 25 + Math.random() * 35; A.sfx('esturro', undefined, undefined, 0.55); }
     // quem está trabalhando na tela: o som do trabalho, no ritmo de cada ferramenta
     if (st && t > nextWork && speed > 0) { nextWork = t + 0.18; workSounds(st); }
+    // Etapa 10: a bicharada do curral (o galo canta de madrugada)
+    if (st && st.campo && st.campo.bichos.length && t > nextFarm && speed > 0 && !busy) farmSounds(st, t, dawn);
   }
   const WORK_SFX = { madeira: ['machado', 0.75], pedra: ['pedra', 0.6], construir: ['martelo', 0.55], oficio: ['lasca', 0.9], argila: ['cavar', 1.1], agua: ['agua', 1.6], frutas: ['colher', 1.1], pesca: ['agua', 4.5], conservar: ['colher', 1.5],
-    caminho: ['cavar', 0.9], tabuas: ['serra', 0.9], tecido: ['tear', 0.8] };
+    caminho: ['cavar', 0.9], tabuas: ['serra', 0.9], tecido: ['tear', 0.8], cerca: ['martelo', 0.7], plant: ['enxada', 0.9], weed: ['enxada', 0.7], harvest: ['colher', 1] };
   const workAt = new Map();
   function workSounds(st) {
     let n = 0;
@@ -404,12 +447,28 @@
       const a = p.act;
       let ws = WORK_SFX[a.type === 'oficio' && a.make === 'tabuas' ? 'tabuas' : a.type === 'oficio' && (a.make === 'mantas' || a.make === 'redes') ? 'tecido' : a.type];
       if (a.type === 'madeira' && G.Tech && G.Tech.known(st, 'machado')) ws = ['machado', 0.5];   // com o machado, golpes mais rápidos
-      if (!ws || !(a.stage === 'work' || a.stage === 'build')) continue;
+      const field = a.type === 'roca' && WORK_SFX[a.stage];   // Etapa 10: a roça tem o som de cada etapa
+      if (field) ws = field;
+      if (!ws || !(a.stage === 'work' || a.stage === 'build' || field)) continue;
       if (now < (workAt.get(p.id) || 0)) continue;
       workAt.set(p.id, now + ws[1] * (0.85 + Math.random() * 0.3));
       A.sfx(ws[0], p.x, p.y, 0.7);
       n++;
     }
+  }
+
+  // os bichos do curral perto da câmera: um de cada vez, de tempos em tempos; o galo, de madrugada
+  const FARM_SFX = { galinha: 'galinha', porco: 'porco', ovelha: 'ovelha', gado: 'vaca' };
+  function farmSounds(st, t, dawn) {
+    nextFarm = t + 4 + Math.random() * 8;
+    const cam = G.R.cam, TS = G.CFG.TILE, cx = cam.x / TS, cy = cam.y / TS;
+    const near = st.campo.bichos.filter((a) => Math.abs(a.x - cx) < 16 && Math.abs(a.y - cy) < 12);
+    if (!near.length) return;
+    const rooster = dawn && near.find((a) => a.sp === 'galinha' && a.sex === 'M');
+    if (rooster) { A.sfx('galo', rooster.x, rooster.y, 0.8); return; }
+    if (st.ck.hour < 6 || st.ck.hour >= 20) return;   // de noite o curral dorme
+    const a = near[Math.floor(Math.random() * near.length)], k = FARM_SFX[a.sp];
+    if (k) A.sfx(k, a.x, a.y, 0.6);
   }
 
   // ---------- música ----------
@@ -432,7 +491,7 @@
     if (!st || mode !== 'game') return 'dia';
     const Nr = G.Narr, l = st.life;
     if (l && l.party && l.party.on) return 'festa';
-    if ((Nr && (Nr.wolvesOut(st) || Nr.is(st, 'nevasca'))) || st.people.some((p) => p.alive && p.labor && p.labor.hard && !p.labor.helped)) return 'perigo';
+    if ((Nr && (Nr.beastsOut(st) || Nr.is(st, 'nevasca'))) || st.people.some((p) => p.alive && p.labor && p.labor.hard && !p.labor.helped)) return 'perigo';
     if (l && l.story && l.story.on) return l.story.music ? 'flauta' : 'historia';
     const h = st.ck.hour;
     if (h >= 20 || h < 5) return 'noite';

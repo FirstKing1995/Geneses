@@ -6,8 +6,8 @@
 
   God.MIRACLES = {
     calor: { name: 'Calor', cost: 10, r: 5, icon: 'fogo', desc: 'Aquece e protege um lugar por uma noite inteira.', answers: 'frio lobos' },
-    raio: { name: 'Raio', cost: 15, r: 0.9, icon: 'raio', desc: 'Derruba árvore ou pedra e espanta lobos. Em alguém, pune.', answers: 'lobos' },
-    chuva: { name: 'Chuva', cost: 15, r: 12, icon: 'chuva', desc: 'Frutas fora de época e cabaças cheias.', answers: 'fome sede' },
+    raio: { name: 'Raio', cost: 15, r: 0.9, icon: 'raio', desc: 'Derruba árvore ou pedra e espanta lobos e onça. Em alguém, pune.', answers: 'lobos onca' },
+    chuva: { name: 'Chuva', cost: 15, r: 12, icon: 'chuva', desc: 'Frutas fora de época, cabaças cheias e roça crescendo.', answers: 'fome sede' },
     cura: { name: 'Cura', cost: 20, r: 0.9, icon: 'cura', desc: 'Devolve a saúde de alguém e salva um parto difícil.', answers: 'parto doente', unlock: 'familia' },
     revelacao: { name: 'Revelação', cost: C.REVELACAO_COST, r: 0.9, icon: 'revelacao', desc: 'Num sonho, entrega a alguém a próxima descoberta, se o povo já começou a entender.', answers: '', unlock: 'descoberta' },
   };
@@ -17,10 +17,11 @@
     fome: ['Deus, temos fome.', 'Céu, não deixa a gente passar fome.'],
     sede: ['Deus, precisamos de água.', 'Céu, manda chuva, por favor.'],
     lobos: ['Deus, os lobos!', 'Céu, espanta esses lobos!', 'Deus, protege a gente dos lobos!'],
+    onca: ['Deus, a onça!', 'Céu, tira essa onça daqui!', 'Deus, protege a gente da onça!'],
   };
   const THANKS = ['Ele ouviu!', 'Obrigado, céu!', 'Eu sabia que alguém olhava por nós.'];
-  God.PRAYER_HELP = { frio: 'calor', fome: 'chuva', sede: 'chuva', parto: 'cura', doente: 'cura', lobos: 'raio' };
-  const PRAYER_H = { lobos: 2 };   // prazo curto: lobo não espera
+  God.PRAYER_HELP = { frio: 'calor', fome: 'chuva', sede: 'chuva', parto: 'cura', doente: 'cura', lobos: 'raio', onca: 'raio' };
+  const PRAYER_H = { lobos: 2, onca: 2 };   // prazo curto: lobo e onça não esperam
   God.unlocked = (S, kind) => {
     const m = God.MIRACLES[kind];
     if (!m || !m.unlock) return true;
@@ -97,7 +98,8 @@
       }
       if (n.saude < 30 && !p.labor) return { kind: 'doente', target: p.id, text: 'Deus, me cura.' };
     }
-    if (G.Narr && G.Narr.threat(S, p)) return { kind: 'lobos', target: p.id, text: S.rng.pick(PRAYERS.lobos) };
+    const th = G.Narr && G.Narr.threat(S, p);
+    if (th) { const k = th.k === 'onca' ? 'onca' : 'lobos'; return { kind: k, target: p.id, text: S.rng.pick(PRAYERS[k]) }; }
     if (n.calor < 35 && p.tempHere < 10 && !(ctx.fireLit && G.Sim.fireHeat(S, p.x, p.y) > 5)) return { kind: 'frio', target: p.id, text: S.rng.pick(PRAYERS.frio) };
     if (n.fome < 25 && ctx.food === 0 && ctx.bushFruit < 3) return { kind: 'fome', target: p.id, text: S.rng.pick(PRAYERS.fome) };
     if (n.sede < 25 && S.stock.agua === 0) return { kind: 'sede', target: p.id, text: S.rng.pick(PRAYERS.sede) };
@@ -112,6 +114,7 @@
     if (kind === 'parto') return !!(t.alive && t.labor && t.labor.hard && !t.labor.helped);
     if (kind === 'doente') return t.alive && t.needs.saude < 60;
     if (kind === 'lobos') return !!(G.Narr && G.Narr.wolvesOut(S));
+    if (kind === 'onca') return !!(G.Narr && G.Narr.oncaOut(S));
     return false;
   }
   // agradecimento (e luto): não pede nada, não espera resposta; a fé de quem agradece vira Poder (Etapa 6)
@@ -195,7 +198,7 @@
       p.prayer = null; p.prayCool = S.t + C.PRAYER_COOLDOWN_H * 60;
     }
   };
-  // pedido na hora, sem esperar a volta do relógio (mordida de lobo)
+  // pedido na hora, sem esperar a volta do relógio (mordida de lobo ou de onça)
   God.cry = function (S, p, kind) {
     if (S.safe || !p.alive || p.prayer || p.carriedBy || G.Family.age(S, p) < 5 || !PRAYERS[kind]) return false;
     const text = S.rng.pick(PRAYERS[kind]);
@@ -341,7 +344,8 @@
       answer(S, 'fome sede', x, y, C.CHUVA_R);
       Sm.refresh(S);
       const dry = G.Narr ? G.Narr.onChuva(S) : '';
-      msg = 'Chuva abençoada: ' + fruits + ' frutas nasceram nos arbustos.' + (dry ? ' ' + dry : '');
+      const rocas = G.Campo ? G.Campo.onChuva(S, x, y) : 0;   // Etapa 10: a roça molhada cresce uns dias de uma vez
+      msg = 'Chuva abençoada: ' + fruits + ' frutas nasceram nos arbustos.' + (rocas ? (rocas === 1 ? ' A roça cresceu a olhos vistos.' : ' As roças cresceram a olhos vistos.') : '') + (dry ? ' ' + dry : '');
       S.events.push({ k: 'miracle', kind, x, y });
     } else if (kind === 'raio') {
       S.events.push({ k: 'bolt', x, y });

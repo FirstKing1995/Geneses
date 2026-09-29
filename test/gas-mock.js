@@ -20,6 +20,10 @@ function makeGas(opts) {
         getValues() { const out = []; for (let i = 0; i < nr; i++) { const row = self.rows[r - 1 + i] || []; const o = []; for (let j = 0; j < nc; j++) o.push(row[c - 1 + j] === undefined ? '' : row[c - 1 + j]); out.push(o); } return out; },
         setValues(v) { for (let i = 0; i < nr; i++) { const row = self.rows[r - 1 + i] || (self.rows[r - 1 + i] = []); for (let j = 0; j < nc; j++) row[c - 1 + j] = v[i][j]; } },
         setValue(v) { const row = self.rows[r - 1] || (self.rows[r - 1] = []); row[c - 1] = v; },
+        clearContent() {
+          for (let i = 0; i < nr; i++) { const row = self.rows[r - 1 + i]; if (row) for (let j = 0; j < nc; j++) row[c - 1 + j] = ''; }
+          while (self.rows.length > 1 && self.rows[self.rows.length - 1].every((v) => v === '' || v === undefined)) self.rows.pop();   // a última linha com conteúdo
+        },
       };
     };
   }

@@ -1078,6 +1078,104 @@
     return (wolfSheets[fur] = c);
   };
 
+  // ---------- bichos da Etapa 9: de lado (direita; a esquerda é o espelho), 3 quadros de passo, e o abatido ----------
+  // capivara e lobo continuam com as folhas de 4 lados; aqui entram veado, porco-do-mato, paca, tatu, anta, jacu, tapiti,
+  // jacaré e a onça (a onça é do Narrador, mas a folha é a mesma)
+  const padRows = (rows, w) => rows.map((r) => (r + '.'.repeat(w)).slice(0, w));
+  const BEASTS = {
+    veado: { w: 15, body: ['..........k.k..', '.........kFkFk.', '.........kFFFFk', '........kFFeFFn', '........kFFFFk.', '.kkkkkkkFFLk...', 'kWFFFFFFFFFLk..', 'kFFFFFFFFFFFk..', '.kfLLLLLLffk...'],
+      dead: ['.kkkkkkkkkk.k..', 'kWFFFFFFFFFkFk.', 'kFFFFFFFFFFFFkn', '.kfLLLLLLffkkk.'],
+      legs: [['..kf....kf.....', '..kf....kf.....', '..kk....kk.....'], ['..kf....kf.....', '.kf......kf....', 'kk........kk...'], ['..kf....kf.....', '...kf..kf......', '....kk.kk......']],
+      map: { k: '#2b1d1a', F: '#b06a3c', f: '#7a4428', L: '#ead2a4', W: '#f6eedc', e: '#181425', n: '#181425' }, alt: { F: '#96582f', f: '#643a22' } },
+    porco: { w: 14, body: ['...kBkBkBk....', '..kFFFFFFFkk..', '.kFFFFFFFCFFk.', 'kFFFFFFFFCFeFk', 'kfFFFFFFFCFFFn', 'kffFFFFFFCFFk.', '.kffffffffkk..'],
+      legs: [['..kfk...kfk...', '..kk....kk....'], ['.kfk.....kfk..', '.kk......kk...'], ['...kfk.kfk....', '...kk..kk.....']],
+      map: { k: '#1c1418', B: '#6e6060', F: '#554848', f: '#3a3032', C: '#c4b6a2', e: '#e6d4a8', n: '#9a7474' }, alt: { F: '#4a3e3e', f: '#302828' } },
+    paca: { w: 12, body: ['...kkkkkk...', '..kFFFFFFkk.', '.kFWFFWFFFFk', 'kFFFWFFWFeFk', 'kFWFFWFFFFFn', '.kfffffffffk'],
+      legs: [['..kfk..kfk..', '..kk...kk...'], ['.kfk....kfk.', '.kk.....kk..'], ['...kfk.kfk..', '...kk..kk...']],
+      map: { k: '#2b1d1a', F: '#8e5c34', f: '#603e24', W: '#f2e6ca', e: '#181425', n: '#3e2731' }, alt: { F: '#7e5030' } },
+    tatu: { w: 14, body: ['....kkkkk.....', '...kFbFbFk.k..', '..kFFbFbFFkHk.', '.kFFFbFbFFkeHk', 'kTkffbfbffkHHn'],
+      legs: [['..kf...kf.....', '..kk...kk.....'], ['.kf.....kf....', '.kk.....kk....'], ['...kf.kf......', '...kk.kk......']],
+      map: { k: '#3e2731', F: '#a8968c', b: '#6e5e58', f: '#86766e', H: '#d4b0a0', T: '#8e7e76', e: '#181425', n: '#3e2731' }, alt: { F: '#9a8a82' } },
+    anta: { w: 18, body: ['...kkkkkkkk.......', '..kFFFFFFFFkk.kk..', '.kFFFFFFFFFFFkWk..', 'kFFFFFFFFFFFFFFFk.', 'kFFFFFFFFFFFFFeFFk', 'kfFFFFFFFFFFFFFFFk', 'kffFFFFFFFFFFkfFFn', '.kffffffffffk..kk.'],
+      legs: [['..kfk....kfk......', '..kfk....kfk......', '..kk.....kk.......'], ['..kfk....kfk......', '.kfk......kfk.....', '.kk........kk.....'], ['..kfk....kfk......', '...kfk..kfk.......', '...kk...kk........']],
+      map: { k: '#141014', F: '#4c4648', f: '#343032', W: '#e0d8d0', e: '#b8a890', n: '#2a2428' }, alt: { F: '#565052' } },
+    jacu: { w: 11, body: ['......kkk..', '.....kFFFk.', '.....kFeFGk', 'kk..kFFRRk.', 'kFk.kWFFRk.', '.kFkFFWFk..', '..kFFFFk...'],
+      legs: [['....r.r....', '...rr.rr...'], ['...r...r...', '..rr...rr..'], ['....r.r....', '....rrrr...']],
+      map: { k: '#141014', F: '#3e3034', f: '#2a2224', R: '#e43b44', W: '#cfc4bc', G: '#8b9bb4', e: '#e8d8a0', r: '#b04a4a' }, alt: { F: '#48383a' } },
+    tapiti: { w: 10, body: ['......k.k.', '.....kFkFk', '.....kFkFk', '.....kFFFk', '..kkkkFeFn', '.kFFFFFFFk', 'kWFFFFFFk.', '.kffffffk.'],
+      legs: [['..kk..kk..', '..........'], ['.kk....kk.', 'kk......kk'], ['...kkkk...', '..........']],
+      map: { k: '#2b1d1a', F: '#8e7e68', f: '#5e5244', W: '#f6eedc', e: '#181425', n: '#c28569' }, alt: { F: '#9a8872' } },
+    jacare: { w: 22, body: ['.......k.k.k.k....kk..', '..kkkkkfkfkfkfkkkkeFk.', 'kkFFFFFFFFFFFFFFFFFFFk', '.kkLLLLLLLLLLLLLLLLkkk'],
+      legs: [['...kFk...kFk....kFk...', '...kk....kk.....kk....'], ['...kFk...kFk....kFk...', '...kk....kk.....kk....'], ['...kFk...kFk....kFk...', '...kk....kk.....kk....']],
+      map: { k: '#141a12', F: '#4e5e38', f: '#36422a', L: '#a8ac7c', e: '#fee761' }, alt: { F: '#465432' } },
+    onca: { w: 21, body: ['................k.k..', '...............kFkFk.', '..kkkkkkkkkkkkkFFFFFk', '.kFFrFFrFFrFFrFFFFeFn', 'kFFFFFrFFrFFFFFFFFLk.', 'kFkkFrFFFFrFFFFFFFLk.', 'kFk.kfLLLLLLLLLLffk..'],
+      legs: [['kFk..kfk.....kfk.....', 'krk..kfk.....kfk.....', '.k...kk......kk......'], ['kFk..kfk.....kfk.....', 'krk.kfk.......kfk....', '.k..kk.........kk....'], ['kFk..kfk.....kfk.....', 'krk...kfk...kfk......', '.k....kk....kk.......']],
+      map: { k: '#2b1a12', F: '#dc9a32', f: '#a86a22', r: '#4a2c18', L: '#f2dcae', e: '#fee761', n: '#3e2731' } },
+  };
+  A.BEAST = {};
+  for (const k in BEASTS) { const d = BEASTS[k]; A.BEAST[k] = { w: d.w, h: d.body.length + d.legs[0].length, legs: d.legs[0].length }; }
+  // olhos (quadro de frente para a direita): brilham no escuro, como os do lobo
+  A.BEAST_EYES = {};
+  for (const k in BEASTS) BEASTS[k].body.forEach((r, y) => { const x = r.indexOf('e'); if (x >= 0 && !A.BEAST_EYES[k]) A.BEAST_EYES[k] = [x, y]; });
+  function mirrorBuf(b) { const m = new Buf(b.w, b.h); for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) m.set(b.w - 1 - x, y, b.get(x, y)); return m; }
+  const beastCache = {};
+  // folha: 3 quadros (parado, passo, passo) × 2 linhas (direita, esquerda)
+  A.beastSheet = function (sp, alt) {
+    const key = sp + (alt ? '1' : '0');
+    if (beastCache[key]) return beastCache[key];
+    const d = BEASTS[sp], W = d.w, H = A.BEAST[sp].h;
+    const map = Object.assign({}, d.map, alt ? d.alt : null);
+    const [c, x] = mk(W * 3, H * 2);
+    for (let f = 0; f < 3; f++) {
+      const b = fromRows(padRows(d.body.concat(d.legs[f]), W), map);
+      x.drawImage(b.canvas(), f * W, 0);
+      x.drawImage(mirrorBuf(b).canvas(), f * W, H);
+    }
+    return (beastCache[key] = c);
+  };
+  // abatido: deitado de lado, sem as patas, de olho fechado (e mais escuro)
+  A.beastDead = function (sp) {
+    const key = sp + 'x';
+    if (beastCache[key]) return beastCache[key];
+    const d = BEASTS[sp], W = d.w, map = Object.assign({}, d.map);
+    for (const k in map) if (k !== 'k') map[k] = shade(map[k], 0.78);
+    const body = d.dead || d.body, H = A.BEAST[sp].h;
+    const rows = Array(H - body.length).fill('').concat(body.map((r) => r.replace(/e/g, 'k')));
+    return (beastCache[key] = fromRows(padRows(rows, W), map).canvas());
+  };
+  function shade(hex, f) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.round((n >> 16) * f), g = Math.round(((n >> 8) & 255) * f), b = Math.round((n & 255) * f);
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  }
+  // o jacu voando: asas para cima e para baixo (2 quadros × direita e esquerda)
+  const JACU_FLY = [
+    ['..kk.........', '..kFk........', '...kFk.......', '...kFFk......', 'kk..kFFk..kk.', 'kFkkkFFFkkFek', '.kFFFFFFFFRRG', '..kkkkkkkkkk.'],
+    ['.............', '.............', '.............', '..........kk.', 'kk.......kFek', 'kFkkkkkkkFRRG', '.kFFFFFFFFkk.', '..kkkFFFkk...', '....kFFk.....', '....kk.......'],
+  ];
+  A.JACU_FLY_W = 13; A.JACU_FLY_H = 10;
+  A.birdFly = function () {
+    if (beastCache.fly) return beastCache.fly;
+    const W = A.JACU_FLY_W, H = A.JACU_FLY_H, map = BEASTS.jacu.map;
+    const [c, x] = mk(W * 2, H * 2);
+    JACU_FLY.forEach((rows, f) => {
+      const b = fromRows(padRows(rows.concat(Array(H - rows.length).fill('')), W), map);
+      x.drawImage(b.canvas(), f * W, 0);
+      x.drawImage(mirrorBuf(b).canvas(), f * W, H);
+    });
+    return (beastCache.fly = c);
+  };
+  // o jacaré dentro d'água: só os olhos e o focinho de fora (direita e esquerda)
+  A.JACARE_WATER_W = 11; A.JACARE_WATER_H = 3;
+  A.jacareWater = function () {
+    if (beastCache.water) return beastCache.water;
+    const W = A.JACARE_WATER_W, H = A.JACARE_WATER_H;
+    const b = fromRows(padRows(['..kk.......', '.keFkkkkkk.', '..........'], W), { k: '#141a12', F: '#4e5e38', e: '#fee761' });
+    const [c, x] = mk(W, H * 2);
+    x.drawImage(b.canvas(), 0, 0); x.drawImage(mirrorBuf(b).canvas(), 0, H);
+    return (beastCache.water = c);
+  };
+
   // ---------- ícones da interface (10 x 10) ----------
   const ICONS = {
     madeira: [['..........', '..........', '...kkkkkk.', '..kyykbbbk', '.kyooykbbk', '.kyooykBBk', '..kyykBBBk', '...kkkkkk.', '..........', '..........'],
@@ -1179,6 +1277,9 @@
     { k: P.bark, O: P.orange, o: P.rust, Y: P.tan }];
   ICONS.revelacao = [['....y.....', '.y..y..y..', '..y...y...', '..kkkkkk..', '.kWWWWWWk.', 'kWWBnnBWWk', '.kWWWWWWk.', '..kkkkkk..', '..y...y...', '.y..y..y..'],
     { y: P.gold, k: P.ink2, W: P.white, B: P.sky, n: P.ink }];
+  // Etapa 9: a onça
+  ICONS.onca = [['.kk....kk.', 'kFFk..kFFk', 'kFFFkkFFFk', 'kFrFFFFrFk', 'kFeFFFFeFk', 'kFFrFFrFFk', '.kFFLLFFk.', '.kFLnnLFk.', '..kLLLLk..', '...kkkk...'],
+    { k: '#2b1a12', F: '#dc9a32', r: '#4a2c18', e: '#181425', L: '#f2dcae', n: '#3e2731' }];
   ICONS.capivara = [['..........', '......kk..', '.kkkkkFFk.', 'kFFFFFFeFk', 'kFFFFFFFnk', 'kfFFFFFFk.', '.kffffkk..', '.kfk.kfk..', '.kk..kk...', '..........'],
     { k: '#2b1d1a', F: CAPI_FUR[0].F, f: CAPI_FUR[0].f, e: P.ink, n: P.maroon }];
   ICONS.limpo = ICONS.verao;
@@ -1242,9 +1343,242 @@
     return fromRows(['.kkkkk.', 'kWWWWWk', 'kkWWWkk', 'kbkbkbk', 'kbbkbbk', 'kbkbkbk', 'kbbbbbk', '.kkkkk.'],
       { k: P.maroon, W: P.parch, b: P.wood }).canvas();
   }
+  // ---------- Etapa 10: roça, curral, cercas e bichos de criação ----------
+  // roça (48 x 48): terra lavrada em leiras a cada 8 px (duas por fileira de tiles); plantas no pé das leiras
+  const SOIL = { warm: ['#4e3220', '#6a4428', '#83583a', '#9c6c46'], rich: ['#3a2416', '#52341e', '#6a462c', '#82583a'], snow: ['#8e847e', '#aaa09a', '#c4bcb6', '#e0dad4'] };
+  A.ROCA_COLS = [5, 14, 24, 33, 43];
+  const fieldCache = {};
+  A.rocaSoil = function (kind) {
+    const key = 's' + kind;
+    if (fieldCache[key]) return fieldCache[key];
+    const c = SOIL[kind] || SOIL.warm, b = new Buf(48, 48);
+    for (let y = 0; y < 48; y++) for (let x = 0; x < 48; x++) {
+      const m = y % 8, h = H7(x, y, 90);
+      let col = m <= 1 ? c[0] : m === 2 || m === 7 ? c[1] : m === 4 ? c[3] : c[2];
+      if (col === c[2] && h < 0.08) col = c[3];
+      else if (col === c[3] && h < 0.25) col = c[2];
+      else if (col === c[0] && h < 0.1) col = c[1];
+      if (x === 0 || x === 47 || y === 0 || y === 47) col = c[0];
+      b.set(x, y, col);
+    }
+    return (fieldCache[key] = b.canvas());
+  };
+  // as plantas: 0 broto, 1 nova, 2 crescida, 3 madura (cada cultura com o seu jeito)
+  const PLANT_MAP = { g: '#3e8948', G: '#63c74d', l: '#9be070', s: '#265c42', r: '#a22633', y: '#fee761', Y: '#feae34', O: '#f77622', o: '#be4a2f',
+    w: '#ffffff', W: '#c0cbdc', p: '#c9a068', P: '#8a6440', t: '#e4a672', b: '#733e39' };
+  const SPROUT = ['g.g', '.G.'];
+  const PLANTS = {
+    feijao: [SPROUT, ['.gGg.', 'gG.Gg', '..s..'],
+      ['..gGg..', '.gGGGg.', 'gGgGgGg', '.gGsGg.', '...s...'],
+      ['..gYg..', '.pGgYp.', 'gYpGpgY', '.gpsGp.', '...s...']],
+    milho: [SPROUT, ['..G..', '.gG..', '..Gg.', '.gG..', '..s..'],
+      ['...G...', '...G...', '..gGg..', '.g.G.g.', 'g..G..g', '...G...', '..gG...', '.g.G.g.', 'g..G..g', '...s...', '...s...'],
+      ['...t...', '..t.t..', '...G...', '..gGg..', '.g.GYg.', 'g..GY.g', '...Gg..', '..gGY..', '.g.GY.g', 'g..G..g', '...s...', '...s...']],
+    abobora: [SPROUT, ['.gGg.', 'gGgGg', '..s..'],
+      ['.gG...Gg.', 'gGGg.gGGg', '.gGGgGGg.', '...gsg...'],
+      ['.gG...Gg.', 'gGGgOgGGg', '.gGOOOGg.', '..gOoOs..', '...ooo...']],
+    mandioca: [SPROUT, ['g.G.g', '.gGg.', '..r..', '..r..'],
+      ['g.G.G.g', '.gGgGg.', 'G.grg.G', '.g.r.g.', 'gGgrgGg', '.g.r.g.', '...r...', '...r...', '...r...'],
+      ['g.G.Y.g', '.gGgGg.', 'G.grg.Y', '.gGrGg.', 'gGgrgGg', '.g.r.g.', '.gGrGg.', '...r...', '...r...', '..brb..']],
+    algodao: [SPROUT, ['.gGg.', 'gGsGg', '..s..'],
+      ['..gGg..', '.gGgGg.', 'gGgGgGg', '.gGgGg.', 'gGgsgGg', '...s...', '...s...'],
+      ['.w.gw..', 'wWgGgWw', 'gGwGgGg', '.wGgWw.', 'gGgswGg', '...s...', '...s...']],
+  };
+  // uma fileira de tiles da roça (48 x 30): duas leiras de plantas; o pé da leira de cima em y 20, o da de baixo em y 28
+  A.rocaRow = function (k, stage, r) {
+    const key = 'r' + k + stage + ':' + r;
+    if (fieldCache[key]) return fieldCache[key];
+    const [c, x] = mk(48, 30), rows = PLANTS[k][stage];
+    const img = fromRows(padRows(rows, rows[0].length), PLANT_MAP), mir = mirrorBuf(img);
+    const cv = img.canvas(), cm = mir.canvas();
+    for (const [li, foot] of [[0, 20], [1, 28]]) A.ROCA_COLS.forEach((cx, i) => {
+      const h = H7(i, r * 2 + li, 91 + stage), dx = Math.round((h - 0.5) * 2);
+      x.drawImage(h < 0.5 ? cv : cm, cx - (img.w >> 1) + dx, foot + 1 - img.h);
+    });
+    return (fieldCache[key] = c);
+  };
+  // mato no meio da roça (e a palha que sobra depois da colheita)
+  A.rocaWeeds = function () {
+    if (fieldCache.weeds) return fieldCache.weeds;
+    const b = new Buf(48, 48), tuft = [[0, 0, '#9ab84a'], [-1, 1, '#6a8a2e'], [1, 1, '#6a8a2e'], [0, 1, '#9ab84a'], [-2, 0, '#6a8a2e'], [2, 0, '#9ab84a']];
+    for (let k = 0; k < 16; k++) {
+      const x = 3 + Math.floor(H7(k, 1, 93) * 42), y = 3 + Math.floor(H7(k, 2, 93) * 40);
+      for (const [dx, dy, col] of tuft) if (H7(k, dx * 7 + dy, 94) < 0.85) b.set(x + dx, y + dy, col);
+    }
+    return (fieldCache.weeds = b.canvas());
+  };
+  A.rocaStubble = function (fibra) {
+    const key = 'stub' + (fibra ? 1 : 0);
+    if (fieldCache[key]) return fieldCache[key];
+    const b = new Buf(48, 48);
+    for (let r = 0; r < 6; r++) A.ROCA_COLS.forEach((cx, i) => {
+      const y = 8 * r + 5, h = H7(i, r, 95);
+      b.set(cx, y, fibra ? '#dfe6f0' : '#d8b56a'); b.set(cx, y + 1, '#8a6440');
+      if (h < 0.5) { b.set(cx + 1, y, fibra ? '#ffffff' : '#b8904e'); b.set(cx + 1, y + 1, '#6e4428'); }
+    });
+    return (fieldCache[key] = b.canvas());
+  };
+
+  // curral (48 x 60, o cercado começa em y 12): o chão, o fundo (cerca de trás, dos lados e o abrigo) e a frente (cerca com a porteira)
+  const FENCE = { post: '#9a5e42', postD: '#4e2e22', cap: '#b86f50', rail: '#d49a6a', railD: '#733e39', gate: '#e4a672', gateD: '#9a5e42' };
+  A.FENCE = FENCE;
+  function postAt(b, x, yTop, yBot) { for (let y = yTop; y <= yBot; y++) { b.set(x, y, y === yTop ? FENCE.cap : FENCE.post); b.set(x + 1, y, FENCE.postD); } }
+  function railH(b, x0, x1, y, gate) { for (let x = x0; x <= x1; x++) { b.set(x, y, gate ? FENCE.gate : FENCE.rail); b.set(x, y + 1, gate ? FENCE.gateD : FENCE.railD); } }
+  function railV(b, x, y0, y1) { for (let y = y0; y <= y1; y++) { b.set(x, y, FENCE.rail); b.set(x + 1, y, FENCE.railD); } }
+  A.curral = function (lv, part) {
+    const key = 'c' + lv + part;
+    if (fieldCache[key]) return fieldCache[key];
+    const b = new Buf(48, 60), T0 = 12;
+    if (part === 'ground') {
+      for (let y = T0 + 1; y < T0 + 47; y++) for (let x = 2; x < 46; x++) {
+        const h = H7(x, y, 96);
+        b.set(x, y, h < 0.1 ? '#d8b56a' : h < 0.2 ? '#a8845a' : h < 0.24 ? '#6e4a2e' : '#8a6a44');
+      }
+      // o cocho (tronco escavado) com o que sobrou da ração
+      for (let x = 32; x <= 43; x++) { b.set(x, T0 + 30, PLANK[0]); b.set(x, T0 + 31, x === 32 || x === 43 ? PLANK[0] : '#d8b56a'); b.set(x, T0 + 32, P.wood); b.set(x, T0 + 33, PLANK[0]); }
+      return (fieldCache[key] = b.canvas());
+    }
+    if (part === 'back') {
+      // abrigo no canto de trás: palha (o grande, de tábuas)
+      const big = lv >= 2;
+      for (let y = T0 - 2; y <= T0 + 14; y++) for (let x = 3; x <= (big ? 24 : 18); x++) if (y > T0 + 4) b.set(x, y, 'rgba(24,20,37,0.25)');
+      for (const x of [4, big ? 23 : 17]) for (let y = T0 + 2; y <= T0 + 14; y++) { b.set(x, y, PLANK[2]); b.set(x + 1, y, PLANK[0]); }
+      if (big) {
+        plankWall(b, 4, T0 + 1, 24, T0 + 8);
+        shingles(b, 14, T0 - 10, T0 + 1, 11, 12);
+      } else thatch(b, 11, T0 - 8, T0 + 2, 7, 9, 97);
+      // cerca de trás e dos lados
+      for (const x of [1, 9, 17, 25, 33, 41, 46]) postAt(b, x, T0 - 6, T0 + 2);
+      railH(b, 1, 47, T0 - 5); railH(b, 1, 47, T0 - 1);
+      for (const x of [1, 46]) { for (let y = T0 + 3; y <= T0 + 44; y += 8) postAt(b, x, y, y + 7); railV(b, x, T0 + 2, T0 + 46); }
+      return (fieldCache[key] = b.canvas());
+    }
+    // frente: cerca com a porteira aberta no meio (de dia os bichos saem para pastar em volta)
+    const yb = T0 + 47;
+    for (const x of [1, 9, 17, 29, 37, 46]) postAt(b, x, yb - 7, yb + 1);
+    railH(b, 1, 17, yb - 6); railH(b, 1, 17, yb - 2); railH(b, 29, 47, yb - 6); railH(b, 29, 47, yb - 2);
+    // a porteira, virada para dentro junto do mourão da esquerda: tábuas claras vistas de lado, com a travessa
+    for (let y = yb - 14; y <= yb - 1; y++) { b.set(19, y, FENCE.gate); b.set(20, y, FENCE.gateD); }
+    for (const y of [yb - 13, yb - 8, yb - 3]) { b.set(21, y, FENCE.gateD); }
+    line(b, 21, yb - 12, 21, yb - 4, FENCE.gate);
+    return (fieldCache[key] = b.canvas());
+  };
+  // cerca marcada no mapa (26 x 40; a origem do tile em y 10): o mourão no meio, as varas até o vizinho da direita (m & 1) e de
+  // baixo (m & 2). A porteira (cerca em cima de caminho) não tem mourão no meio: as tábuas claras vão de um vizinho ao outro
+  // (m & 4: a da direita é de porteira; m & 8: a de baixo). m & 16: mourão; m & 32: neve; m & 64: sozinha (tocos de vara)
+  A.fence = function (m) {
+    const key = 'f' + m;
+    if (fieldCache[key]) return fieldCache[key];
+    const b = new Buf(26, 40);
+    if (m & 2) { if (m & 8) { for (let y = 24; y <= 32; y++) { b.set(7, y, FENCE.gate); b.set(8, y, FENCE.gateD); } } else railV(b, 7, 24, 32); }
+    if (m & 16) postAt(b, 7, 15, 23);
+    else if (m & 2) for (let y = 16; y <= 23; y++) { b.set(7, y, m & 8 ? FENCE.gate : FENCE.rail); b.set(8, y, m & 8 ? FENCE.gateD : FENCE.railD); }
+    if (m & 1) {
+      const x0 = m & 16 ? 9 : 7, g = !!(m & 4);
+      railH(b, x0, 23, 16, g); railH(b, x0, 23, 20, g);
+      if (g) line(b, x0, 21, 22, 16, FENCE.gateD);
+    } else if (m & 64) { railH(b, 9, 10, 16); railH(b, 9, 10, 20); }
+    if (m & 32) { if (m & 16) { b.set(7, 14, '#eef3f9'); b.set(8, 14, '#eef3f9'); } if (m & 1) for (let x = 10; x <= 22; x += 3) b.set(x, 15, '#eef3f9'); }
+    return (fieldCache[key] = b.canvas());
+  };
+
+  // bichos de criação: de lado (direita; a esquerda é o espelho), 3 quadros de passo, como os do mato
+  const CRIA = {
+    galinha: { w: 9, body: ['......RR.', '.....kWWk', '.....kWey', '.k...kWWk', 'kWk.kWWk.', 'kWWkWWWk.', 'kwWWWWWk.', '.kwwwwk..'],
+      legs: [['...y.y...'], ['..y...y..'], ['....yy...']],
+      map: { k: '#3e2731', W: '#f2eee4', w: '#c8bfae', R: '#e43b44', e: '#181425', y: '#feae34' }, alt: { W: '#c28a5a', w: '#9a6440', k: '#3e2016' } },
+    galo: { w: 10, body: ['......RRR.', 'k....kOOOk', 'Gk...kOOey', 'GGk..kOOr.', 'kGGkkOOk..', '.kGBBBBBk.', '.kGBBBBBk.', '..kBBBBk..'],
+      legs: [['...y..y...'], ['..y....y..'], ['....yy....']],
+      map: { k: '#2b1d1a', G: '#265c42', O: '#f77622', B: '#be4a2f', R: '#e43b44', r: '#a22633', e: '#181425', y: '#feae34' } },
+    pinto: { w: 5, body: ['..yy.', '.yyey', 'yyyy.', '.YYY.'], legs: [['.o.o.'], ['o...o'], ['..oo.']],
+      map: { y: '#fee761', Y: '#feae34', e: '#181425', o: '#d77643' } },
+    coelho: { w: 10, body: ['......k.k.', '.....kFkFk', '.....kFkFk', '.....kFFFk', '..kkkkFeFn', '.kFFFFFFFk', 'kWFFFFFFk.', '.kffffffk.'],
+      legs: [['..kk..kk..'], ['.kk....kk.'], ['...kkkk...']],
+      map: { k: '#6e6068', F: '#eeeae4', f: '#c4bab4', W: '#ffffff', e: '#e43b44', n: '#f6a0b4' }, alt: { F: '#b8a898', f: '#8a7a6e', W: '#eeeae4', e: '#181425' } },
+    porco: { w: 14, body: ['..........kk..', '..kkkkkkkkPPk.', 'ckPPPPPPPPPPPk', 'kPPPPPPPPPPePk', 'kPPPPPPPPPPPnn', 'kpPPPPPPPPPPk.', '.kppppppppppk.'],
+      legs: [['..kpk...kpk...'], ['.kpk.....kpk..'], ['...kpk.kpk....']],
+      map: { k: '#8a4a4a', P: '#f4a8a0', p: '#d4807a', e: '#181425', n: '#e8747a', c: '#d4807a' }, alt: { P: '#e8b796', p: '#c28569' } },
+    ovelha: { w: 13, body: ['..o.o.o.o....', '.oWoWoWoWokk.', 'oWWWWWWWWkHHk', 'oWwWWWWWWkHeH', 'oWWWWwWWWWkHH', '.oWwWWWwWWo..', '..owwwwwwo...'],
+      legs: [['...kk...kk...'], ['..kk.....kk..'], ['....kk.kk....']],
+      map: { o: '#9a8e7c', W: '#f2ecdc', w: '#cfc4ac', H: '#3e2731', e: '#ead4aa', k: '#262b44' }, alt: { W: '#e0d4bc', w: '#bcae94' } },
+    carneiro: { w: 13, body: ['..o.o.o.o.hh.', '.oWoWoWoWohkh', 'oWWWWWWWWkHHk', 'oWwWWWWWWkHeH', 'oWWWWwWWWWkHH', '.oWwWWWwWWo..', '..owwwwwwo...'],
+      legs: [['...kk...kk...'], ['..kk.....kk..'], ['....kk.kk....']],
+      map: { o: '#9a8e7c', W: '#e8e0cc', w: '#c4b89e', H: '#3e2731', e: '#ead4aa', k: '#262b44', h: '#c9a068' } },
+    vaca: { w: 17, body: ['.............h.h.', '............kHkHk', '..kkkkkkkkkkkHHHk', '.kWWBBWWWWBBkHeHn', 'kWWBBBWWWBBBWkHHn', 'kWWWBWWWWWBWWWkk.', 'kWWWWWWWWWWWWWk..', 'kwWWWWWWWWWWWwk..', '.kwwwwUUwwwwwk...'],
+      legs: [['.kWk.....kWk.....', '.kk......kk......'], ['kWk.......kWk....', 'kk........kk.....'], ['..kWk...kWk......', '..kk....kk.......']],
+      map: { k: '#3e2731', W: '#f2eee4', w: '#c8c0b4', B: '#262b44', H: '#f2eee4', e: '#181425', n: '#e8a0a0', U: '#f4a8a0', h: '#e4d8c0' },
+      alt: { W: '#b86f50', w: '#8a5038', B: '#733e39', H: '#b86f50' } },
+    boi: { w: 18, body: ['............hh.hh.', '.............kHkHk', '..kkkkkkkkkkkkHHHk', '.kWWWWWWWWWBBkHeHn', 'kWWWWWWWWWBBBWkHHn', 'kWWWWWWWWWWBWWWkk.', 'kWWWWWWWWWWWWWWk..', 'kwWWWWWWWWWWWWwk..', '.kwwwwwwwwwwwwk...'],
+      legs: [['.kWk......kWk.....', '.kk.......kk......'], ['kWk........kWk....', 'kk.........kk.....'], ['..kWk....kWk......', '..kk.....kk.......']],
+      map: { k: '#2b1d1a', W: '#8a6a58', w: '#5e4636', B: '#3e2731', H: '#8a6a58', e: '#181425', n: '#3e2731', h: '#e4d8c0' },
+      alt: { W: '#c8bca8', w: '#9a8e7c', H: '#c8bca8' } },
+  };
+  A.CRIA = {};
+  for (const k in CRIA) { const d = CRIA[k]; A.CRIA[k] = { w: d.w, h: d.body.length + d.legs[0].length }; }
+  A.criaSheet = function (key, alt) {
+    const ck = 'cria' + key + (alt ? '1' : '0');
+    if (beastCache[ck]) return beastCache[ck];
+    const d = CRIA[key], W = d.w, H = A.CRIA[key].h, map = Object.assign({}, d.map, alt ? d.alt : null);
+    const [c, x] = mk(W * 3, H * 2);
+    for (let f = 0; f < 3; f++) {
+      const b = fromRows(padRows(d.body.concat(d.legs[f]), W), map);
+      x.drawImage(b.canvas(), f * W, 0);
+      x.drawImage(mirrorBuf(b).canvas(), f * W, H);
+    }
+    return (beastCache[ck] = c);
+  };
+  // o primeiro quadro, para os ícones da interface ("cria:vaca")
+  function criaIcon(key) {
+    const d = CRIA[key]; if (!d) return null;
+    const W = d.w, H = A.CRIA[key].h, [c, x] = mk(W, H);
+    x.drawImage(A.criaSheet(key), 0, 0, W, H, 0, 0, W, H);
+    return c;
+  }
+  // coisas da roça e do curral no estoque e nas costas
+  function item10(kind) {
+    switch (kind) {
+      case 'feijao': return fromRows(['.kkkk.', 'kSsSSk', 'kSSsSk', 'kSSSSk', '.kkkk.'], { k: '#5e3c2a', S: '#b8904e', s: '#7a3a2a' }).canvas();
+      case 'milho': return fromRows(['..gYY.', '.gYyYk', 'gYyYk.', '.kkk..'], { g: '#3e8948', Y: '#fee761', y: '#feae34', k: '#8a6440' }).canvas();
+      case 'abobora': return fromRows(['..g..', '.kOk.', 'kOoOk', 'kOoOk', '.kkk.'], { g: '#3e8948', O: '#f77622', o: '#d77643', k: '#733e39' }).canvas();
+      case 'mandioca': return fromRows(['g.g...', '.bbk..', '.kbbk.', '..kbbk', '...kk.'], { g: '#3e8948', b: '#c28569', k: '#553022' }).canvas();
+      case 'ovos': return fromRows(['.WW.WW.', 'WwWWWwW', 'kTyTyTk', '.kkkkk.'], { W: '#f6eedc', w: '#dccfb8', k: '#733e39', y: '#d8b56a', T: '#b8904e' }).canvas();
+      case 'leite': return fromRows(['.kk.', 'kTTk', 'kWWk', 'kWwk', '.kk.'], { k: '#3a4466', T: '#8a6440', W: '#ffffff', w: '#c0cbdc' }).canvas();
+    }
+    return null;
+  }
+  A.item10 = item10;
+
+  ICONS.roca = [['..........', '.g....g...', 'gGg..gGg..', '.s....s...', 'bbbbbbbbbb', 'dddddddddd', '...g....g.', '..gGg..gGg', '...s....s.', 'bbbbbbbbbb'],
+    { g: '#3e8948', G: '#63c74d', s: '#265c42', b: '#83583a', d: '#4e3220' }];
+  ICONS.algodao = [['..........', '..wwW.ww..', '.wwwwWwww.', '.wWwwwwWw.', '..wwwwww..', '.gGwwwwGg.', 'gGg.ww.gGg', '.g..kk..g.', '....kk....', '....kk....'],
+    { w: '#ffffff', W: '#c0cbdc', g: '#3e8948', G: '#63c74d', k: '#733e39' }];
+  ICONS.cerca = [['.kk..kk.kk', '.PL..PL.PL', 'RRRRRRRRRR', 'rrrrrrrrrr', '.PL..PL.PL', 'RRRRRRRRRR', 'rrrrrrrrrr', '.PL..PL.PL', '.PL..PL.PL', '.kk..kk.kk'],
+    { k: '#3e2731', P: FENCE.post, L: FENCE.postD, R: FENCE.rail, r: FENCE.railD }];
+  ICONS.galinha = [['.....RR...', '....kWWk..', '....kWeky.', '..k.kWWk..', '.kWkWWWk..', 'kWWWWWWk..', 'kwWWWWwk..', '.kwwwwk...', '...y..y...', '..yy.yy...'],
+    { R: '#e43b44', W: '#f2eee4', w: '#c8bfae', k: '#3e2731', e: '#181425', y: '#feae34' }];
+  ICONS.feijao = [['..........', '.kkk......', 'kBbbk.kkk.', 'kbbbkkBbbk', '.kkk.kbbbk', '..kkk.kkk.', '.kBbbk....', '.kbbbk....', '..kkk.....', '..........'],
+    { B: '#c05a3c', b: '#7a3a2a', k: '#3e2731' }];
+  ICONS.milho = [['......gg..', '.....gGk..', '....kYYk..', '...kYyYk..', '..kYyYk...', '.kYyYkg...', '.kYYkgG...', 'kgGkgG....', 'gG.gG.....', 'g.........'],
+    { Y: '#fee761', y: '#feae34', g: '#3e8948', G: '#63c74d', k: '#8a6440' }];
+  ICONS.abobora = [['....gs....', '....s.....', '..kkOkk...', '.kOoOoOk..', 'kOOoOOoOk.', 'kOoOOoOOk.', 'kOoOOoOOk.', '.kOoOoOk..', '..kkkkk...', '..........'],
+    { O: '#f77622', o: '#d77643', k: '#733e39', g: '#3e8948', s: '#265c42' }];
+  ICONS.mandioca = [['.g.G.g....', '..gGg.....', '...b......', '..kbk.....', '.kBbbk....', '.kBbbbk...', '..kBbbbk..', '...kBbbbk.', '....kkbbk.', '......kk..'],
+    { B: '#e8b796', b: '#c28569', k: '#553022', g: '#3e8948', G: '#63c74d' }];
+  ICONS.ovos = [['..........', '...kk.....', '..kWWk.kk.', '.kWWWwkWWk', '.kWWwwkWwk', 'kkkWWkkWwk', 'kyTyTyTyTk', '.kTyTyTyk.', '..kkkkkk..', '..........'],
+    { W: '#f6eedc', w: '#dccfb8', k: '#733e39', y: '#d8b56a', T: '#b8904e' }];
+  ICONS.leite = [['....kk....', '...kTTk...', '...kWWk...', '..kWWWWk..', '.kWWWWWwk.', '.kWWWWWwk.', '.kWWWWwwk.', '.kWWWWwwk.', '..kwwwwk..', '...kkkk...'],
+    { W: '#ffffff', w: '#c0cbdc', T: '#8a6440', k: '#3a4466' }];
+  ICONS.curral = [['.yyyy.....', 'yYYYYy....', 'kPkkPkkPkk', 'RRRRRRRRRR', 'rPrrPrrPrr', '.P..P..P..', 'RRRRRRRRRR', 'rPrrPrrPrr', '.P.hPh.P..', '.PhhPhh.P.'],
+    { y: THATCH[1], Y: THATCH[3], k: '#3e2731', P: FENCE.post, R: FENCE.rail, r: FENCE.railD, h: '#d8b56a' }];
+  ICONS.mascate = [['..kkk.....', '.kHHHk....', 'kkkkkkk...', '..ksk.kk..', '..kkk.kBk.', '.kcccckBBk', '.kcccckBBk', '.kcccckkk.', '..kk.kk...', '..kk.kk...'],
+    { H: '#8a6440', s: '#e8b796', c: '#6a8a9a', B: '#b8904e', k: '#262b44' }];
+  ICONS.praga = [['.........k', '........k.', '..kkkkkGk.', '.kGGGGGGek', 'kGgGgGgGGk', '.kkgkkkkk.', '..k.kk..k.', '.k..k.k..k', 'k...k..k..', '..........'],
+    { k: '#265c42', G: '#9be070', g: '#63c74d', e: '#181425' }];
+  ICONS.adubo = ICONS.roca;
   const iconCache = {};
   A.icon = function (name) {
     if (iconCache[name]) return iconCache[name];
+    if (name.indexOf('cria:') === 0) return (iconCache[name] = criaIcon(name.slice(5)));   // bicho de criação (Etapa 10)
     const def = ICONS[name]; if (!def) return null;
     return (iconCache[name] = fromRows(def[0], def[1]).canvas());
   };
@@ -1274,7 +1608,8 @@
     S.item = {};
     for (const k of ['madeira', 'pedra', 'frutas', 'peixe', 'agua', 'carne', 'couro', 'argila', 'defumado', 'seca']) S.item[k] = item(k);
     for (const k of ['tabuas', 'fibra', 'mantas', 'redes']) S.item[k] = item7(k);
-    S.item.caca = S.item.carne;
+    for (const k of ['feijao', 'milho', 'abobora', 'mandioca', 'ovos', 'leite']) S.item[k] = item10(k);   // Etapa 10
+    S.item.caca = S.item.carne; S.item.cria = S.item.ovos; S.item.racao = S.item.milho; S.item.cerca = S.item.madeira;
     // sombra
     const ellipse = (w, h, a) => {
       const [c, x] = mk(w, h);
@@ -1287,6 +1622,7 @@
     };
     S.shadow = ellipse(10, 4, 0.3);
     S.bigShadow = ellipse(20, 6, 0.26);
+    S.midShadow = ellipse(15, 5, 0.28);   // bichos grandes (Etapa 9)
     // letra z para o sono
     S.z = fromRows(['kkkk', '..k.', '.k..', 'kkkk'], { k: '#dfe6f0' }).canvas();
     // seta de seleção

@@ -11,21 +11,23 @@
   let S = null;
   UI.sel = { person: 0, building: 0 };
 
-  const VORDER = ['frutas', 'pesca', 'caca', 'agua', 'madeira', 'pedra', 'argila', 'construir', 'oficio', 'conservar', 'fogo'];
+  const VORDER = ['frutas', 'pesca', 'caca', 'roca', 'criacao', 'agua', 'madeira', 'pedra', 'argila', 'construir', 'oficio', 'conservar', 'fogo'];
   const VICON = { frutas: 'frutas', pesca: 'peixe', caca: 'lanca', agua: 'agua', madeira: 'madeira', pedra: 'pedra', argila: 'argila',
-    construir: 'construir', oficio: 'ferramentas', conservar: 'moquem', fogo: 'fogo' };
+    construir: 'construir', oficio: 'ferramentas', conservar: 'moquem', fogo: 'fogo', roca: 'roca', criacao: 'galinha' };
   const VHELP = {
     frutas: 'Colher pitangas nos arbustos. Arbustos não dão fruta no inverno.',
     pesca: 'Pescar na beira da água. Peixe assado na fogueira sustenta mais.',
-    caca: 'Caçar capivaras com a lança: carne e couro para roupas. Precisa de ferramenta.',
+    caca: 'Caçar com a lança (os bichos ariscos, só com o arco): carne e couro para roupas. Precisa de ferramenta. Quem tem lança na mão também revida quando um bicho ataca.',
     agua: 'Encher as cabaças para beber no acampamento.',
     madeira: 'Cortar árvores. Lenha para a fogueira e para as obras. Depois dos cestos, cada árvore dá também 2 de fibra.',
     pedra: 'Quebrar pedras. Precisa para a fogueira, a barraca avançada e as ferramentas.',
     argila: 'Cavar barro na beira d\'água, para o forno de barro.',
-    construir: 'Levar material, erguer e melhorar as obras que você marcar, e abrir os caminhos marcados.',
+    construir: 'Levar material, erguer e melhorar as obras que você marcar, abrir os caminhos e fincar as cercas marcadas.',
     oficio: 'Ferramentas (1 pedra e 1 madeira) e roupas de couro (2 couros). Com as oficinas: tábuas na marcenaria (2 madeira) e mantas e redes na tecelagem (fibra).',
     conservar: 'Levar peixe e carne ao moquém e frutas ao jirau: comida que dura o inverno.',
     fogo: 'Manter a fogueira acesa quando esfria.',
+    roca: 'Plantar, capinar e colher nas roças, e levar a colheita ao estoque. No inverno só a mandioca cresce.',
+    criacao: 'Recolher ovos, leite e lã no curral, levar ração aos bichos no frio e abater quando o curral enche. Criança de 7 anos já recolhe ovos.',
   };
   const LEVELS = ['Proibido', 'Baixa', 'Normal', 'Máxima'];
   const NEEDS = [['fome', 'Fome', 'fome'], ['sede', 'Sede', 'sede'], ['energia', 'Energia', 'energia'], ['calor', 'Calor', 'calor'], ['social', 'Social', 'social'], ['saude', 'Saúde', 'saude']];
@@ -72,14 +74,26 @@
     i_arco: 'Com o arco inventado, suba Caça nas Vontades.',
     i_tambor: 'Com o tambor inventado, a próxima festa tem batuque: nascimento, fim do inverno, fartura ou descoberta.',
     i_todas: 'A Revelação (tecla V) adianta a invenção que você escolher na janela das Descobertas.',
+    // Etapa 9: bichos
+    b_tres: 'Suba Caça nas Vontades. Bicho que ninguém caçou ainda atiça a curiosidade dos caçadores.',
+    b_seis: 'Veado, jacu e tapiti são ariscos: só com o arco. O jacaré, só com o arco e quando toma sol.',
+    b_luta: 'Com lança na mão, quem é atacado revida e quem está perto vem ajudar. Suba Ofício para ter ferramentas.',
+    b_onca: 'Depois de um ataque, os caçadores vão atrás da onça na toca. Um Raio (R) em cima dela também serve.',
+    // Etapa 10: campo
+    c_roca: 'Construir → Roça (H), em terra boa perto de casa. Suba Roça nas Vontades.',
+    c_cinco: 'Toque numa roça e escolha o que plantar. O algodão vem depois da roça; a mandioca aguenta o inverno.',
+    c_curral: 'Construa um curral (Y): o mascate passa trocando bichos. Com macho e fêmea, nasce cria.',
+    c_cerca: 'Construir → Cerca (X) e feche a volta toda. Árvore, pedra e água também servem de parede.',
   };
   // estoque: os cinco de sempre e os da Etapa 5, que aparecem quando existem
   const RES = [['madeira', 'madeira'], ['pedra', 'pedra'], ['argila', 'argila'], ['tabuas', 'tabuas'], ['fibra', 'fibra'], ['agua', 'agua'], ['frutas', 'frutas'], ['peixe', 'peixe'], ['carne', 'carne'],
+    ['feijao', 'feijao'], ['milho', 'milho'], ['abobora', 'abobora'], ['mandioca', 'mandioca'], ['ovos', 'ovos'], ['leite', 'leite'],
     ['defumado', 'defumado'], ['seca', 'frutaseca'], ['couro', 'couro'], ['ferramentas', 'ferramentas'], ['roupas', 'roupas'], ['mantas', 'mantas'], ['redes', 'redes']];
   const RES_BASE = new Set(['madeira', 'pedra', 'agua', 'frutas', 'peixe']);
   const RES_NAME = { madeira: 'Madeira', pedra: 'Pedra', agua: 'Água', frutas: 'Frutas', peixe: 'Peixe', carne: 'Carne', couro: 'Couro', argila: 'Argila',
     defumado: 'Defumado (peixe e carne)', seca: 'Fruta seca', ferramentas: 'Ferramentas', roupas: 'Roupas de couro',
-    tabuas: 'Tábuas', fibra: 'Fibra (embira)', mantas: 'Mantas', redes: 'Redes de dormir' };
+    tabuas: 'Tábuas', fibra: 'Fibra (embira, algodão e lã)', mantas: 'Mantas', redes: 'Redes de dormir',
+    feijao: 'Feijão', milho: 'Milho', abobora: 'Abóbora', mandioca: 'Mandioca', ovos: 'Ovos', leite: 'Leite' };
   // o nome do material no meio de uma frase
   const MAT_WORD = { madeira: 'madeira', pedra: 'pedra', argila: 'argila', tabuas: 'tábuas', fibra: 'fibra' };
   UI.RES_NAME = RES_NAME;
@@ -111,19 +125,21 @@
     });
     // construir (as das descobertas aparecem com elas; o armazém, depois do primeiro inverno) e a ferramenta de caminho
     const builds = [['fogueira', 'fogo'], ['barraca', 'barraca'], ['armazem', 'armazem'], ['moquem', 'moquem'], ['jirau', 'jirau'], ['forno', 'forno'],
-      ['marcenaria', 'marcenaria'], ['tecelagem', 'tecelagem']];
+      ['marcenaria', 'marcenaria'], ['tecelagem', 'tecelagem'], ['roca', 'roca'], ['curral', 'curral']];
     const SHORT = { barraca: 'Barraca', forno: 'Forno' };   // nome curto no botão (o painel fica em duas fileiras)
     $('#builds').innerHTML = builds.map(([t, icn]) => {
       const d = C.BUILD[t];
       return `<button class="btn bbtn" data-build="${t}" title="${esc(d.name + ': ' + d.desc)}">
         <img class="ico" src="${ic(icn)}" alt=""><span>${SHORT[t] || d.name}<kbd>${d.key}</kbd></span>
-        <span class="cost">${Object.keys(d.cost).map((k) => `<span data-c="${k}"><img src="${ic(k)}" alt="${RES_NAME[k]}"> ${d.cost[k]}</span>`).join('')}</span>
+        <span class="cost">${Object.keys(d.cost).length ? Object.keys(d.cost).map((k) => `<span data-c="${k}"><img src="${ic(k)}" alt="${RES_NAME[k]}"> ${d.cost[k]}</span>`).join('') : '<span>só trabalho</span>'}</span>
       </button>`;
     }).join('') + `<button class="btn bbtn" data-tool="caminho" title="Arraste pelo chão para marcar um caminho. Terra: só trabalho, anda-se 30% mais rápido. Pedra: 1 pedra por passo, 45% mais rápido.">
         <img class="ico" src="${ic('caminho')}" alt=""><span>Caminho<kbd>P</kbd></span><span class="cost"><span>arraste no chão</span></span>
+      </button><button class="btn bbtn" data-tool="cerca" title="Arraste pelo chão para marcar uma cerca de vara: 1 madeira por passo. Bicho não passa; gente pula. Em cima de caminho vira porteira.">
+        <img class="ico" src="${ic('cerca')}" alt=""><span>Cerca<kbd>X</kbd></span><span class="cost"><span data-c="madeira"><img src="${ic('madeira')}" alt="Madeira"> 1/passo</span></span>
       </button>`;
     $('#builds').addEventListener('click', (e) => {
-      const t = e.target.closest('[data-tool]'); if (t) { UI.hooks.road(); return; }
+      const t = e.target.closest('[data-tool]'); if (t) { if (t.dataset.tool === 'cerca') UI.hooks.fence(); else UI.hooks.road(); return; }
       const b = e.target.closest('[data-build]'); if (!b) return;
       UI.hooks.place(b.dataset.build);
     });
@@ -171,8 +187,12 @@
       if (b.dataset.act === 'rename') {
         const kid = S.people.find((q) => q.id === UI.sel.person);
         if (kid) UI.birth(kid, null, true);
-        return;
       }
+    });
+    // a obra escolhida no mapa tem painel próprio (a evolução, remover, o que plantar)
+    $('#obra-close').addEventListener('click', () => UI.select(0, 0));
+    $('#obra').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-act]'); if (!b || !S) return;
       const bd = Sim.building(S, UI.sel.building); if (!bd) return;
       if (b.dataset.act === 'upgrade') {
         const kind = b.dataset.kind || null;
@@ -190,14 +210,26 @@
         return;
       }
       if (b.dataset.act === 'back') UI.select(0, 0);
+      if (b.dataset.act === 'crop' && bd.type === 'roca' && G.Campo) {
+        // Etapa 10: o que plantar nesta roça (vazio: o povo escolhe pela estação e pelo que falta)
+        const f = G.Campo.farmOf(bd), k = b.dataset.k || null;
+        f.pick = k;
+        const why = k ? G.Campo.plantWhy(S, k) : '';
+        UI.toast(k ? 'Esta roça vai plantar ' + C.ROCA[k].name.toLowerCase() + (why ? ' (agora não dá: ' + why + ').' : '.') : 'O povo escolhe o que plantar nesta roça.', why ? 'warn' : '');
+        return;
+      }
       lastInsp = '';
     });
     // Crônica e painéis
     $('#btn-cronica').addEventListener('click', () => UI.sheet(document.body.dataset.sheet === 'cronica' ? '' : 'cronica'));
     $('#cronica-close').addEventListener('click', () => UI.sheet(''));
     document.querySelectorAll('#mobnav button').forEach((b) => b.addEventListener('click', () => {
-      UI.sheet(document.body.dataset.sheet === b.dataset.open ? '' : b.dataset.open);
+      const n = b.dataset.open;
+      if (UI.isMobile() || n === 'cronica') UI.sheet(document.body.dataset.sheet === n ? '' : n);
+      else UI.toggle(n);
     }));
+    applyOpen();
+    if (firstRun) { const v = document.querySelector('#mobnav [data-open="vontades"]'); if (v) v.classList.add('nudge'); }
     // velocidade e menu
     document.querySelectorAll('.spd[data-speed]').forEach((b) => b.addEventListener('click', () => UI.hooks.speed(+b.dataset.speed)));
     const pause = document.querySelector('.spd[data-speed="0"]');
@@ -210,6 +242,12 @@
     off.innerHTML = C.OFFLINE_RATE_NAMES.map((n, i) => `<option value="${i}">${n}</option>`).join('');
     off.addEventListener('change', () => { if (!S) return; S.opts = S.opts || {}; S.opts.offline = +off.value; UI.toast('Com o jogo fechado: ' + C.OFFLINE_RATE_NAMES[+off.value] + '.'); });
     $('#menu-save').addEventListener('click', () => { UI.hooks.save(); });
+    // noites picantes (0.10): só entre adultos; desligado, não acontecem mais neste mundo
+    $('#menu-picante').addEventListener('change', (e) => {
+      if (!S) return;
+      S.opts = S.opts || {}; S.opts.picante = !!e.target.checked;
+      UI.toast(e.target.checked ? 'Noites picantes ligadas: só entre adultos, e nada descrito.' : 'Noites picantes desligadas neste mundo.', '');
+    });
     // som: chave geral e as três trilhas (guardado neste aparelho)
     const Au = G.Audio;
     if (Au) {
@@ -235,14 +273,53 @@
 
   UI.sheet = function (name) {
     if (name) document.body.dataset.sheet = name; else delete document.body.dataset.sheet;
-    document.querySelectorAll('#mobnav button').forEach((b) => b.classList.toggle('on', b.dataset.open === name));
+    paintNav();
   };
   UI.isMobile = () => window.matchMedia('(max-width: 820px)').matches;
+  // No computador os painéis ficam fechados e abrem ao clicar (como no celular), cada um no seu canto; o que fica
+  // aberto é lembrado neste aparelho. O painel da obra abre quando se escolhe uma obra no mapa.
+  const PANELS = ['vontades', 'construir', 'deus', 'povo', 'obra'];
+  let firstRun = false;
+  const openSet = new Set((() => {
+    try {
+      const raw = localStorage.getItem('genesis-paineis');
+      if (raw === null) { firstRun = true; return []; }
+      const v = JSON.parse(raw);
+      return Array.isArray(v) ? v.filter((k) => PANELS.indexOf(k) >= 0 && k !== 'obra') : [];
+    } catch (e) { return []; }
+  })());
+  function saveOpen() { try { localStorage.setItem('genesis-paineis', JSON.stringify([...openSet].filter((k) => k !== 'obra'))); } catch (e) { /* sem guardar */ } }
+  function applyOpen() {
+    const v = [...openSet].join(' ');
+    if (v) document.body.dataset.open = v; else delete document.body.dataset.open;
+    paintNav();
+  }
+  function paintNav() {
+    const mob = UI.isMobile(), sh = document.body.dataset.sheet || '';
+    document.querySelectorAll('#mobnav button').forEach((b) => {
+      const n = b.dataset.open;
+      b.classList.toggle('on', mob || n === 'cronica' ? sh === n : openSet.has(n));
+      b.setAttribute('aria-pressed', b.classList.contains('on') ? 'true' : 'false');
+    });
+  }
+  UI.isOpen = (n) => (UI.isMobile() ? document.body.dataset.sheet === n : openSet.has(n));
+  UI.toggle = function (n, on) {
+    const want = on === undefined ? !openSet.has(n) : !!on;
+    if (want !== openSet.has(n)) {
+      if (want) openSet.add(n); else openSet.delete(n);
+      applyOpen(); saveOpen();
+    }
+    if (n === 'vontades') { const v = document.querySelector('#mobnav .nudge'); if (v) v.classList.remove('nudge'); }
+    if (UI.hooks && UI.hooks.panels) UI.hooks.panels();
+  };
+  UI.closeAll = function () { if (!openSet.size) return false; openSet.clear(); applyOpen(); saveOpen(); if (UI.hooks && UI.hooks.panels) UI.hooks.panels(); return true; };
+  window.addEventListener('resize', paintNav);
 
   UI.bind = function (state) {
     S = state;
     if (S.narr) { $('#menu-narr').value = S.narr.kind; $('#narr-desc').textContent = G.Narr.kind(S).desc; }
     $('#menu-offline').value = String(S.opts && S.opts.offline !== undefined ? S.opts.offline : C.OFFLINE_RATE_DEFAULT);
+    $('#menu-picante').checked = !(S.opts && S.opts.picante === false);
     UI.sel = { person: 0, building: 0 };
     lastInsp = ''; cardsKey = '';
     $('#chron').innerHTML = '';
@@ -260,7 +337,15 @@
       const p = S.people.find((q) => q.id === pid);
       if (p && p.alive) { AI.touch(S, p); S.stats.inspected = true; if (center) UI.hooks.center(p.x * C.TILE, p.y * C.TILE); }
     }
-    if ((pid || bid) && UI.isMobile()) UI.sheet('povo');
+    // a obra no seu painel; a pessoa, no painel do povo
+    if (UI.isMobile()) {
+      if (bid) UI.sheet('obra');
+      else if (pid) UI.sheet('povo');
+      else if (document.body.dataset.sheet === 'obra') UI.sheet('');
+    } else {
+      UI.toggle('obra', !!bid);
+      if (pid) UI.toggle('povo', true);
+    }
     UI.update(0, true);
   };
 
@@ -297,7 +382,7 @@
   };
 
   // faixa do almanaque: o que o Narrador trouxe (ou está trazendo)
-  const EV_ICON = { lobos: 'lobo', nevasca: 'neve', tempestade: 'chuva', seca: 'seca', andarilho: 'pessoa', fartura: 'frutas', piracema: 'peixe', veranico: 'verao' };
+  const EV_ICON = { lobos: 'lobo', nevasca: 'neve', tempestade: 'chuva', seca: 'seca', andarilho: 'pessoa', fartura: 'frutas', piracema: 'peixe', veranico: 'verao', onca: 'onca', mascate: 'mascate', praga: 'praga' };
   function paintEvent() {
     const el = $('#event-line'), st = G.Narr.status(S);
     if (!st) { if (!el.hidden) { el.hidden = true; delete document.body.dataset.ev; } return; }
@@ -350,6 +435,13 @@
   }
   function paintBuilds() {
     document.querySelectorAll('.bbtn').forEach((b) => {
+      if (b.dataset.tool === 'cerca') {
+        const open = G.Tech.known(S, 'cerca');
+        if (b.hidden === open) b.hidden = !open;
+        b.classList.toggle('on', !!(UI.hooks.fencing && UI.hooks.fencing()));
+        const lack = b.querySelector('[data-c]'); if (lack) lack.classList.toggle('lack', S.stock.madeira < 1);
+        return;
+      }
       if (b.dataset.tool) { b.classList.toggle('on', !!(UI.hooks.roading && UI.hooks.roading())); return; }
       const d = C.BUILD[b.dataset.build];
       const open = G.Tech.buildOpen(S, b.dataset.build);
@@ -408,8 +500,15 @@
       return `<li><button data-pid="${p.id}"><span class="q">“${esc(p.prayer.text)}”</span><span class="meta">${esc(p.name)} · faltam ${h} h · atenda com ${help}</span></button></li>`;
     }).join('');
     setHTML($('#prayers'), html);
+    const bd = $('#badge-deus');
+    if (bd) {
+      const n = UI.isOpen('deus') ? 0 : pr.length;
+      if (bd.hidden !== !n) bd.hidden = !n;
+      if (n && bd.textContent !== String(n)) bd.textContent = String(n);
+    }
   }
   function paintInspector() {
+    paintObra();
     const el = $('#inspector');
     if (UI.sel.person) {
       const p = S.people.find((q) => q.id === UI.sel.person);
@@ -458,30 +557,38 @@
       setHTML(el, html);
       return;
     }
-    if (UI.sel.building) {
-      const b = Sim.building(S, UI.sel.building);
-      if (!b) { el.innerHTML = ''; return; }
-      const d = Sim.def(b), job = Sim.jobOf(b);
-      const opts = Sim.upgrades(S, b);
-      const sig = b.id + ':' + (d.lv || 1) + (d.kind || '') + (b.built ? 1 : 0) + (b.up ? 'u' + b.up.lv + (b.up.kind || '') : '') + '|' + opts.map((o) => (o.kind || '') + (o.why ? 0 : 1)).join(',');
-      if (lastInsp !== sig) {
-        lastInsp = sig;
-        const lvChip = C.BUILD[b.type].up ? `<span class="small muted">nível ${d.lv || 1}${d.max ? ' · o último' : ''}</span>` : '';
-        el.innerHTML = `<div class="insp">
-          <h3><span>${esc(d.name)}</span>${lvChip}</h3>
-          <p class="small muted">${esc(d.desc)}</p>
-          <p class="small" id="bstatus"></p>
-          ${b.built && !b.up && opts.length ? upgradeHTML(b, opts) : ''}
-          <div class="chips">
-            <button class="btn btn-small" data-act="remove">${b.up ? 'Cancelar melhoria' : b.built ? 'Remover' : 'Cancelar obra'}</button>
-          </div>
-        </div>`;
-      }
-      const st = el.querySelector('#bstatus'); if (st) st.textContent = buildingStatus(b, d, job);
+    if (el.innerHTML) el.innerHTML = '';
+  }
+  // o painel da obra: o nível, o que ela faz agora, a evolução (melhorias) e remover
+  function paintObra() {
+    const el = $('#obra');
+    const b = UI.sel.building ? Sim.building(S, UI.sel.building) : null;
+    if (!b) {
+      if (el.innerHTML) el.innerHTML = '';
+      lastInsp = '';
+      if (UI.sel.building) UI.select(0, 0);   // a obra saiu do mapa
       return;
     }
-    if (el.innerHTML) el.innerHTML = '';
-    lastInsp = '';
+    const d = Sim.def(b), job = Sim.jobOf(b);
+    const opts = Sim.upgrades(S, b);
+    const sig = b.id + ':' + (d.lv || 1) + (d.kind || '') + (b.built ? 1 : 0) + (b.up ? 'u' + b.up.lv + (b.up.kind || '') : '') + '|' + opts.map((o) => (o.kind || '') + (o.why ? 0 : 1)).join(',');
+    if (lastInsp !== sig) {
+      lastInsp = sig;
+      $('#obra-title').textContent = d.name;
+      const lv = C.BUILD[b.type].up ? `<p class="small muted">Nível ${d.lv || 1}${d.max ? ', o último' : ''}${b.built ? '' : ' · marcada, esperando o povo'}</p>` : b.built ? '' : '<p class="small muted">Marcada, esperando o povo</p>';
+      el.innerHTML = `<div class="insp">
+        ${lv}
+        <p class="small muted">${esc(d.desc)}</p>
+        <p class="small" id="bstatus"></p>
+        <div id="bextra"></div>
+        ${b.built && !b.up && opts.length ? upgradeHTML(b, opts) : ''}
+        <div class="chips">
+          <button class="btn btn-small" data-act="remove">${b.up ? 'Cancelar melhoria' : b.built ? 'Remover' : 'Cancelar obra'}</button>
+        </div>
+      </div>`;
+    }
+    const st = el.querySelector('#bstatus'); if (st) st.textContent = buildingStatus(b, d, job);
+    const ex = el.querySelector('#bextra'); if (ex) setHTML(ex, b.built ? campoHTML(b) : '');
   }
   function costText(cost) {
     const parts = Object.keys(cost || {}).map((k) => cost[k] + ' de ' + (MAT_WORD[k] || k));
@@ -498,6 +605,8 @@
         'Material ' + have + '/' + need + (job.progress > 0 ? ' · trabalho ' + Math.floor(job.progress * 100) + '%' : '') +
         (short.length && job.progress <= 0 ? ' · falta ' + short.map((k) => MAT_WORD[k] || k).join(' e ') + ' no estoque' + (short.includes('tabuas') ? ' (a marcenaria faz)' : short.includes('fibra') ? ' (vem da casca das árvores cortadas)' : '') : '');
     }
+    if (b.type === 'roca' && G.Campo) return rocaStatus(b);
+    if (b.type === 'curral' && G.Campo) return curralStatus(b, d);
     const f = d.fire;
     if (b.type === 'fogueira') return (b.fuel > 0 ? 'Acesa · lenha ' + b.fuel.toFixed(1) + '/' + C.FIRE_CAP : 'Apagada · o povo reacende quando esfriar') +
       ' · ' + f.seats + ' dormem no calor · histórias para até ' + f.listen;
@@ -514,6 +623,67 @@
     const guests = Object.keys(b.guests || {}).filter((id) => b.guests[id] > S.t).map(nm).filter(Boolean);
     return 'Dormem aqui: ' + (b.beds.map(nm).filter(Boolean).join(', ') || 'ninguém ainda') +
       ' · ' + G.Family.bedLoad(S, b) + ' de ' + d.cap + ' lugares · +' + d.heat + ' °C' + (guests.length ? ' · esta noite, de visita: ' + guests.join(', ') : '');
+  }
+  // ---------- Etapa 10: roça e curral no inspetor ----------
+  const dias = (n) => (n === 1 ? '1 dia' : n + ' dias');
+  function rocaStatus(b) {
+    const K = G.Campo, f = K.farmOf(b), out = [];
+    const nm = (k) => (C.ROCA[k] ? C.ROCA[k].name.toLowerCase() : '');
+    if (f.st === 'vazia') {
+      const k = K.cropOf(S, b), why = f.pick ? K.plantWhy(S, f.pick) : '';
+      out.push(k ? 'Terra lavrada: o povo vai plantar ' + nm(k) + '.' : f.pick ? 'Esperando para plantar ' + nm(f.pick) + ': ' + why + '.' : 'Terra lavrada. No inverno só a mandioca vai para a terra.');
+      if (!(S.vontades.roca | 0)) out.push('Roça está proibida nas Vontades.');
+    } else if (f.st === 'crescendo') {
+      const left = K.daysLeft(S, f.k, f.grow);
+      out.push((f.k === 'algodao' ? 'Algodão' : C.ROCA[f.k].name) + ' crescendo: ' + Math.floor(f.grow * 100) + '%' + (left < Infinity ? ', madura em ' + dias(left) : ', parada no frio') + '.');
+      if (f.mato && !f.weeded) out.push('O mato apareceu: falta capinar.');
+      else if (f.weeded) out.push('Capinada.');
+    } else out.push((C.ROCA[f.k].name) + ' madur' + (f.k === 'feijao' || f.k === 'milho' || f.k === 'algodao' ? 'o' : 'a') + ': hora de colher!' +
+      (S.t - f.ripeAt > C.ROCA[f.k].ripe * C.DAY_MIN * 0.5 ? ' Já está passando do ponto.' : ''));
+    if (f.st !== 'vazia') {
+      const n = K.yieldOf(S, b);
+      out.push('Colheita esperada: ' + n + (f.k === 'algodao' ? ' de fibra' : ' porções') + (f.lost > 0.01 ? ' (perdeu ' + Math.round(f.lost * 100) + '%)' : '') + ((f.bonus || 1) > 1 ? ' · fartura +25%' : '') + '.');
+    }
+    if (f.pile > 0) out.push('No chão, esperando quem leve: ' + f.pile + ' de ' + (f.pileK === 'fibra' ? 'algodão' : nm(f.pileK)) + '.');
+    if (f.last && f.st === 'vazia') out.push('Última colheita: ' + f.last.n + (f.last.k === 'algodao' ? ' de algodão.' : ' de ' + nm(f.last.k) + '.'));
+    if (G.Tech.known(S, 'cerca')) out.push(K.enclosed(S, b) ? 'Cercada: bicho do mato não entra.' : 'Aberta: bicho do mato pode entrar e comer.');
+    return out.join(' ');
+  }
+  function curralStatus(b, d) {
+    const K = G.Campo, pe = K.penOf(b), animals = K.animalsOf(S, b), out = [];
+    if (!animals.length) out.push(K.known(S, 'criacao') ? 'Vazio. Um mascate passa por estas terras trocando bichos de criação.' : 'Vazio.');
+    else out.push('Lugares: ' + (Math.round(K.load(S, b) * 10) / 10) + ' de ' + K.cap(S, b) + '.');
+    const wait = [];
+    if (pe.ovos >= 1) wait.push(Math.floor(pe.ovos) + (Math.floor(pe.ovos) === 1 ? ' ovo' : ' ovos'));
+    if (pe.leite >= 1) wait.push(Math.floor(pe.leite) + ' de leite');
+    if (pe.la >= 1) wait.push(Math.floor(pe.la) + ' de lã');
+    if (wait.length) out.push('Esperando quem recolha: ' + listPT(wait) + '.');
+    const need = K.feedNeed(S, b);
+    if (animals.length && (S.ck.season === 3 || pe.feed > 0)) out.push('Ração no cocho para ' + (need > 0 ? Math.floor(pe.feed / need) : 0) + ' dias' + (pe.hungry ? ' · os bichos estão com fome!' : '') + '.');
+    if (animals.length) out.push(K.enclosed(S, b) ? 'Cercado: o lobo não entra (a onça pula).' : 'Aberto: de noite o lobo pode levar um bicho.');
+    if (animals.length && !(S.vontades.criacao | 0)) out.push('Criação está proibida nas Vontades.');
+    return out.join(' ');
+  }
+  // o que plantar (roça) e quem mora no curral
+  function campoHTML(b) {
+    const K = G.Campo;
+    if (b.type === 'roca') {
+      const f = K.farmOf(b);
+      const opt = (k, label, icon, title) => `<button class="btn btn-small crop${(f.pick || '') === k ? ' on' : ''}" data-act="crop" data-k="${k}" title="${esc(title)}">${icon ? `<img class="ico" src="${ic(icon)}" alt="">` : ''}${label}</button>`;
+      return `<div class="crops"><span class="small muted">O que plantar</span><div class="chips">` + opt('', 'O povo escolhe', '', 'Pela estação e pelo que falta no estoque.') +
+        K.crops(S).map((k) => { const c = C.ROCA[k]; return opt(k, c.name, k, c.days + ' dias na primavera · ' + c.yield + (c.fibra ? ' de fibra' : ' porções') + (k === 'mandioca' ? ' · cresce até no inverno' : '')); }).join('') + `</div></div>`;
+    }
+    if (b.type === 'curral') {
+      const by = {};
+      for (const a of K.animalsOf(S, b)) { const o = by[a.sp] || (by[a.sp] = { m: 0, f: 0 }); if (a.sex === 'M') o.m++; else o.f++; }
+      const keys = C.CRIA_ORDER.filter((sp) => by[sp]);
+      if (!keys.length) return '';
+      return `<div class="chips herd">` + keys.map((sp) => {
+        const o = by[sp], d = C.CRIA[sp], male = d.male ? d.male.toLowerCase() : 'macho', icon = sp === 'galinha' ? 'galinha' : sp === 'gado' ? 'vaca' : sp;
+        return `<span class="chip" title="${esc(d.name)}"><img src="${ic('cria:' + icon)}" alt=""> ${o.m + o.f} · ${o.m} ${o.m === 1 ? male : male + 's'}</span>`;
+      }).join('') + `</div>`;
+    }
+    return '';
   }
   // as melhorias possíveis: uma (ou as casas do lugar), com o custo e, quando não dá, o porquê
   const HOUSE_ICON = { oca: 'oca', palafita: 'palafita', barro: 'barro', pedra: 'casapedra' };
@@ -568,7 +738,7 @@
       else if (e.k === 'float') UI.float(e.x, e.y, e.text);
       else if (e.k === 'over') UI.hooks.over();
       else if (e.k === 'choice') { if (UI.hooks.choice) UI.hooks.choice(e.gid); }
-      else if (e.k === 'narr') { if (e.on && e.ev === 'lobos' && UI.hooks.alarm) UI.hooks.alarm(); }
+      else if (e.k === 'narr') { if (e.on && (e.ev === 'lobos' || e.ev === 'onca') && UI.hooks.alarm) UI.hooks.alarm(); }
       else if (e.k === 'disc') { if (e.hint) setTimeout(() => UI.toast(e.hint, 'good'), 1800); if (!$('#modal-disc').hidden) UI.disc(); }
       else if (e.k === 'era') { if (UI.hooks.era) UI.hooks.era(); }
       else if (e.k === 'bite') { G.R.event(e); if (UI.hooks.alarm) UI.hooks.alarm(); }
@@ -618,23 +788,35 @@
   };
 
   // ---------- balões de fala ----------
+  // Cada fala fica o tempo de ser lida (em tempo real, qualquer que seja a velocidade do jogo): 5 s e mais um pouco
+  // por letra (a história, mais). Fala nova de quem ainda está falando espera a vez numa fila curta; com fila, a fala
+  // de agora sai depois do tempo mínimo de leitura.
   const bubbles = new Map();
+  const readMs = (text, kind) => Math.min(11000, 5000 + 55 * (text || '').length) + (kind === 'historia' ? 3500 : 0);
+  const minMs = (text, kind) => Math.min(6500, 2600 + 40 * (text || '').length) + (kind === 'historia' ? 1500 : 0);
+  function showSay(b, p, it, now) {
+    b.cur = it; b.t0 = now; b.el.textContent = it.text; b.w = 0;
+    const god = it.kind === 'god' || AI.LINES.deus.indexOf(it.text) >= 0 || !!(p.prayer && p.prayer.text === it.text);
+    b.el.className = 'bubble' + (god ? ' god' : it.kind ? ' ' + it.kind : '');
+    b.el.dataset.who = p.name;
+    if (G.Audio && p.alive) G.Audio.voice(p, it.kind, now);
+  }
   UI.frame = function (now) {
     if (!S) return;
     const scale = G.R.scale();
     const shown = [];
     for (const p of S.people) {
       let b = bubbles.get(p.id);
-      if (!b) { b = { el: document.createElement('div'), id: -1, t0: 0, w: 0, h: 0 }; b.el.className = 'bubble'; b.el.hidden = true; $('#fx').appendChild(b.el); bubbles.set(p.id, b); }
+      if (!b) { b = { el: document.createElement('div'), id: p.sayId, t0: 0, w: 0, h: 0, cur: null, q: [] }; b.el.className = 'bubble'; b.el.hidden = true; $('#fx').appendChild(b.el); bubbles.set(p.id, b); }
       if (p.sayId !== b.id) {
-        b.id = p.sayId; b.t0 = now; b.el.textContent = p.say || ''; b.w = 0;
-        const god = p.sayKind === 'god' || AI.LINES.deus.indexOf(p.say) >= 0 || !!(p.prayer && p.prayer.text === p.say);
-        b.el.className = 'bubble' + (god ? ' god' : p.sayKind ? ' ' + p.sayKind : '');
-        b.el.dataset.who = p.name;
-        if (G.Audio && p.alive && p.say) G.Audio.voice(p, p.sayKind, now);
+        b.id = p.sayId;
+        if (p.say) { b.q.push({ text: p.say, kind: p.sayKind || '' }); if (b.q.length > 2) b.q.splice(0, b.q.length - 2); }
       }
-      const long = p.sayKind === 'historia' ? 5200 : 3400;
-      const show = p.alive && p.say && now - b.t0 < long && b.t0 > 0 && scale >= 1.5;
+      const cur = b.cur, age = now - b.t0;
+      if (b.q.length && (!cur || age >= minMs(cur.text, cur.kind) || age >= readMs(cur.text, cur.kind))) showSay(b, p, b.q.shift(), now);
+      const c = b.cur;
+      const show = p.alive && c && now - b.t0 < readMs(c.text, c.kind) && b.t0 > 0 && scale >= 1.5;
+      if (c && now - b.t0 >= readMs(c.text, c.kind) && !b.q.length) b.cur = null;
       if (!show) { if (!b.el.hidden) b.el.hidden = true; continue; }
       const s = G.R.toScreen(p.x * C.TILE, (p.inTent ? p.y - 1.6 : p.y) * C.TILE - 12);
       shown.push({ b, x: Math.round(s.x), y: Math.round(s.y) });
@@ -796,6 +978,32 @@
     if (!info) { if (onDone) onDone(null); return false; }
     const ps = info.people, one = ps.length === 1;
     const mom = ps.find((q) => q.role === 'mae'), dad = ps.find((q) => q.role === 'pai'), kid = ps.find((q) => q.role === 'filho');
+    const close = (accept) => { $('#modal-choice').hidden = true; if (onDone) onDone(accept); };
+    $('#choice-yes').onclick = () => close(true);
+    $('#choice-no').onclick = () => close(false);
+    if (info.kind === 'mascate' && info.offer && G.Campo) {
+      // Etapa 10: o mascate mostra os bichos e diz o que quer em troca
+      const K = G.Campo, o = info.offer, p = ps[0], ok = K.canPay(S, o.pay), pen = K.bestPen(S, C.CRIA[o.sp].size * (o.m + o.f));
+      $('#choice-ico').src = ic('mascate');
+      $('#choice-title').textContent = 'Um mascate quer trocar';
+      $('#choice-lead').textContent = (p ? p.name + ', mascate de estrada, ' : 'O mascate ') + 'chegou tocando ' + K.animalsText(o.sp, o.m, o.f) + '. Em troca, pede ' + K.payText(o.pay) + '.';
+      const d = C.CRIA[o.sp], kinds = [];
+      for (let i = 0; i < o.m; i++) kinds.push(['M', o.sp === 'galinha' ? 'galo' : o.sp === 'gado' ? 'boi' : o.sp === 'ovelha' ? 'carneiro' : o.sp]);
+      for (let i = 0; i < o.f; i++) kinds.push(['F', o.sp === 'gado' ? 'vaca' : o.sp]);
+      const give = { galinha: 'Põe ovo quase todo dia', coelho: 'Dá cria depressa', porco: 'Engorda com as sobras', ovelha: 'Dá lã na primavera', gado: 'Dá leite todo dia' }[o.sp];
+      $('#choice-people').innerHTML = kinds.map(([sx, key]) => `<li><img class="cria" src="${ic('cria:' + key)}" alt="">
+        <div class="nm">${esc(sx === 'M' && d.male ? d.male : d.name)}<span class="small">${sx === 'M' ? 'macho' : 'fêmea'}</span></div>
+        <div class="chips"><span class="chip">${esc(sx === 'F' || o.sp === 'coelho' || o.sp === 'porco' ? give : 'Sem ele não nasce cria')}</span><span class="chip">Abate: ${d.carne} de carne</span></div></li>`).join('');
+      $('#choice-note').textContent = (pen ? 'No curral: ' + Math.floor(K.room(S, pen) * 10) / 10 + ' lugares livres.' : 'Não há lugar no curral para eles.') + (ok ? '' : ' Já não há o que pagar: o que ele pediu saiu do estoque.') + ' Dispensar não custa nada: outro mascate passa daqui a um tempo.';
+      $('#choice-yes').textContent = 'Trocar';
+      $('#choice-yes').disabled = !ok || !pen;
+      $('#choice-no').textContent = 'Dispensar';
+      $('#modal-choice').hidden = false;
+      setTimeout(() => (ok && pen ? $('#choice-yes') : $('#choice-no')).focus(), 50);
+      return true;
+    }
+    $('#choice-yes').disabled = false;
+    $('#choice-no').textContent = 'Mandar seguir';
     $('#choice-ico').src = ic('pessoa');
     if (info.kind === 'casal') {
       $('#choice-title').textContent = 'Um casal pede abrigo';
@@ -821,9 +1029,6 @@
       ' · barracas com ' + beds + ' lugares, ' + (need > beds ? 'faltariam ' + (need - beds) : 'sobrariam ' + (beds - need)) + ' com ' + (one ? 'quem chegou' : 'eles') + '.' +
       (info.kind === 'casal' ? ' Recusar é para sempre: não vem outro casal.' : '');
     $('#choice-yes').textContent = one ? 'Acolher' : 'Acolher os três';
-    const close = (accept) => { $('#modal-choice').hidden = true; if (onDone) onDone(accept); };
-    $('#choice-yes').onclick = () => close(true);
-    $('#choice-no').onclick = () => close(false);
     $('#modal-choice').hidden = false;
     setTimeout(() => $('#choice-yes').focus(), 50);
     return true;
@@ -979,12 +1184,24 @@
       }).join('');
       $('#inv-count').textContent = '(' + I.count(S) + ' de ' + I.ORDER.length + ')';
     }
-    const inv = discTab === 'inv' && !!I;
-    $('#disc-list').hidden = inv; $('#inv-list').hidden = !inv;
-    for (const b of document.querySelectorAll('.disc-tabs [data-dtab]')) b.classList.toggle('on', b.dataset.dtab === (inv ? 'inv' : 'trilha'));
-    $('#disc-intro').textContent = inv
+    // Etapa 10: as descobertas do campo (roça, algodão, cerca e criação), no mesmo jeito das invenções
+    const K = G.Campo;
+    if (K) {
+      $('#campo-list').innerHTML = K.ORDER.map((id) => {
+        const k = S.tech.known[id];
+        if (k) return row(id, 'known', knownTxt(T.DISC[id], k), '', '');
+        if (K.isOpen(S, id)) { const [st, bar] = learning(id, K.progress(S, id)); return row(id, 'open', st, bar, reveal(id)); }
+        return row(id, 'locked', '<span class="req">Pede ' + esc(listPT(K.missing(S, id))) + '</span>', '', '');
+      }).join('');
+      $('#campo-count').textContent = '(' + K.count(S) + ' de ' + K.ORDER.length + ')';
+    }
+    const cur = discTab === 'inv' && I ? 'inv' : discTab === 'campo' && K ? 'campo' : 'trilha', inv = cur !== 'trilha';
+    $('#disc-list').hidden = cur !== 'trilha'; $('#inv-list').hidden = cur !== 'inv'; $('#campo-list').hidden = cur !== 'campo';
+    for (const b of document.querySelectorAll('.disc-tabs [data-dtab]')) b.classList.toggle('on', b.dataset.dtab === cur);
+    $('#disc-intro').textContent = cur === 'inv'
       ? 'Cada invenção abre quando o que ela pede já existe e aprende com o seu próprio trabalho: várias andam ao mesmo tempo. A Revelação entrega a que você escolher, se o povo já passou de ' + Math.round(C.REVELACAO_MIN * 100) + '% da prática.'
-      : 'O povo aprende fazendo: cada descoberta vem da prática, uma depois da outra. A Revelação de Deus entrega a próxima antes da hora.';
+      : cur === 'campo' ? 'O campo começa com a cerâmica: primeiro a roça; dela vêm o algodão, a criação e, com a corda, a cerca. Cada uma aprende com o seu próprio trabalho, e a Revelação entrega a que você escolher.'
+        : 'O povo aprende fazendo: cada descoberta vem da prática, uma depois da outra. A Revelação de Deus entrega a próxima antes da hora.';
     const alive = S.people.filter((p) => p.alive).length;
     $('#disc-era').hidden = inv;
     $('#disc-era').textContent = S.stats.eraEnd ? 'A Era da Família se fechou em ' + Sim.dateText(S.stats.eraEnd).toLowerCase() + '.' :

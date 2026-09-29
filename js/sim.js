@@ -86,6 +86,19 @@
     tocouFlauta: { t: 'Tocou flauta para o povo', v: 6, d: 1440 },
     festaTambor: { t: 'Dançou ao som do tambor', v: 10, d: 3 * 1440 },
     comeuCozido: { t: 'Comeu um cozido quente', v: 6, d: 1440 },
+    // Etapa 9: bichos
+    atacadoBicho: { t: 'Foi atacado por um bicho', tf: 'Foi atacada por um bicho', v: -10, d: 3 * 1440 },
+    vencemos: { t: 'Viu o povo vencer a fera', v: 10, d: 3 * 1440 },
+    lutou: { t: 'Lutou para defender os seus', v: 6, d: 2 * 1440 },
+    cacouNovo: { t: 'Caçou um bicho que ninguém tinha caçado', v: 6, d: 2 * 1440 },
+    // Etapa 10: campo
+    plantou: { t: 'Plantou a roça', v: 3, d: 1440 },
+    colheita: { t: 'Viu a colheita chegar', v: 6, d: 2 * 1440 },
+    criacaoNova: { t: 'Viu chegar bicho de criação', v: 4, d: 1440 },
+    tomouLeite: { t: 'Tomou leite fresco', v: 4, d: 720 },
+    // relações livres (pedido do jogador na 0.10): só entre adultos
+    noiteTres: { t: 'Passou a noite a três', v: 9, d: 2 * 1440 },
+    noiteMuitos: { t: 'Esticou a festa noite adentro', v: 10, d: 2 * 1440 },
   };
   Sim.MEM = MEM; Sim.TRAIT_DESC = TRAIT_DESC;
 
@@ -215,7 +228,7 @@
     return {
       id: S.nextPid++, name, sex, born: S.t - age * C.DAY_MIN * C.YEAR_DAYS - rng.int(0, C.YEAR_DAYS - 1) * C.DAY_MIN,
       traits: pickTraits(rng),
-      skills: { coleta: 0, pesca: 0, construcao: 0, caca: 0, oficio: 0 }, tool: null, roupa: null,
+      skills: { coleta: 0, pesca: 0, construcao: 0, caca: 0, oficio: 0, plantio: 0, criacao: 0 }, tool: null, roupa: null,
       needs: { fome: 80 + rng.range(0, 10), sede: 75 + rng.range(0, 10), energia: 88, calor: 90, social: 70, saude: 100 },
       mood: 60, mem: [], x: 0, y: 0, px: 0, py: 0, dir: 0, walk: 0,
       path: null, pathI: 0, act: null, carry: null, alive: true, cause: '', diedAt: 0,
@@ -250,7 +263,8 @@
   const REWARD = { filho: 10, camas: 6, estoque: 6, ajuda: 8, povo: 12, festa: 5, ensino: 4,
     d_pedra: 6, d_ferramentas: 6, d_conserva: 8, d_roupas: 8, d_ceramica: 10, d_aldeia: 15,
     o_fogueira: 4, o_caminho: 3, o_armazem: 5, o_tabuas: 4, o_casa: 12, o_oficinas: 8, o_mantas: 8, o_caminhos: 6, o_melhorias: 10,
-    i_faca: 4, i_corda: 4, i_tres: 6, i_arco: 6, i_tambor: 6, i_todas: 15 };
+    i_faca: 4, i_corda: 4, i_tres: 6, i_arco: 6, i_tambor: 6, i_todas: 15, b_tres: 5, b_seis: 8, b_luta: 6, b_onca: 10,
+    c_roca: 6, c_cinco: 10, c_curral: 8, c_cerca: 6 };
   function fixGoals(S) {
     // save da 0.5 no Ato 1: a lista nova, com o que já estava feito
     if ((S.goalsPhase || 1) === 1 && !S.goals.some((g) => g.id === 'olhar')) {
@@ -389,6 +403,7 @@
       const i = ty * w.W + tx;
       if (S.seen && !S.seen[i]) return 'A névoa cobre esse lugar';
       if (G.IS_WATER[w.tile[i]]) return 'Não dá para construir na água';
+      if (def.soil && (w.tile[i] === T.SAND || w.tile[i] === T.MOUNTAIN)) return 'A roça pede terra boa: nada de areia ou pedra';   // Etapa 10
       if (w.bgrid[i] >= 0) return 'Já tem uma obra aqui';
       if (Sim.isCamp(S, i)) return 'Esse é o lugar do estoque';
       const o = G.W.objAt(w, i);
@@ -407,9 +422,11 @@
       const o = G.W.objAt(w, i);
       if (o) G.W.removeObj(w, o);
       if (G.Obras) G.Obras.clearTile(S, i);   // a obra toma o lugar do caminho (e do caminho marcado)
+      if (G.Campo) G.Campo.clearTile(S, i);   // e da cerca (Etapa 10)
       w.bgrid[i] = b.id; G.W.refreshBlock(w, i);
     }
     S.buildings.push(b);
+    if (G.Campo) G.Campo.wallMark(S, b, true);   // a obra é parede para bicho (Etapa 10)
     Sim.refresh(S);
     return b;
   };
@@ -424,6 +441,7 @@
       if (p.inTent === b.id) { G.AI.abort(S, p); p.inTent = 0; }
       if (p.act && p.act.b === b.id) G.AI.abort(S, p);
     }
+    if (G.Campo) G.Campo.onRemoved(S, b);   // a colheita no chão volta ao estoque; os bichos procuram outro curral
     for (let dy = 0; dy < b.h; dy++) for (let dx = 0; dx < b.w; dx++) {
       const i = (b.y + dy) * w.W + b.x + dx;
       w.bgrid[i] = -1; G.W.refreshBlock(w, i);
@@ -474,6 +492,8 @@
         // moquém, jirau e forno: a Tech conta a história
       } else if (G.Obras && G.Obras.onBuilt(S, b)) {
         // armazém, marcenaria e tecelagem (Etapa 7)
+      } else if (G.Campo && G.Campo.onBuilt(S, b)) {
+        // roça e curral (Etapa 10)
       } else {
         if (!S.stats.firstTent) { S.stats.firstTent = true; Sim.chron(S, 'Ergueram a primeira barraca.'); }
         else Sim.toast(S, C.BUILD[b.type].name + ' pronta.');
@@ -521,6 +541,7 @@
       const ok = sum === 0 || can;
       if (!job || (ok && !doable)) { job = j; needs = m; doable = ok; }
     }
+    if (G.Campo) short.madeira += G.Campo.fenceShort(S);   // as cercas marcadas pedem vara (Etapa 10)
     for (const k of C.MATERIALS) short[k] = Math.max(0, short[k] - (st[k] || 0));
     ctx.job = job;
     ctx.jobNeeds = needs || Object.assign({}, short, { madeira: 0, pedra: 0, argila: 0, tabuas: 0, fibra: 0 });
@@ -573,7 +594,7 @@
     if (!hurt && n.fome > 25 && n.sede > 25 && n.calor > 25) n.saude += C.HEALTH_REGEN_DAY / 24 * h;
     n.saude = Math.min(100, n.saude);
     // saúde cheia: as feridas antigas não contam mais para a causa de uma morte futura
-    if (n.saude >= 100) { const d = p.dmg; if (d.fome || d.sede || d.frio || d.raio || d.parto || d.lobo) { d.fome = d.sede = d.frio = 0; d.raio = d.parto = d.lobo = 0; } }
+    if (n.saude >= 100) { const d = p.dmg; if (d.fome || d.sede || d.frio || d.raio || d.parto || d.lobo || d.onca || d.jacare || d.bicho) { d.fome = d.sede = d.frio = 0; d.raio = d.parto = d.lobo = d.onca = d.jacare = d.bicho = 0; } }
     if (S.safe && n.saude < C.OFFLINE_HEALTH_FLOOR) n.saude = C.OFFLINE_HEALTH_FLOOR;
     // desmaia de cansaço, menos quem está indo se aquecer: esse aguenta até chegar ao fogo
     if (!baby && n.energia <= 0 && !p.sleeping && (!p.act || ['dormir', 'beber', 'comer', 'parto', 'aquecer', 'fugir', 'fogo'].indexOf(p.act.type) < 0)) {
@@ -633,7 +654,7 @@
         o.regrow = (o.regrow || 0) + 1;
         const i = o.y * w.W + o.x;
         // no caminho, na trilha e no caminho marcado a árvore não volta (Etapa 7)
-        if (o.regrow >= C.TREE_REGROW_DAYS && w.bgrid[i] < 0 && !Sim.isCamp(S, i) && !(w.road && (w.road[i] || w.roadJob[i])) &&
+        if (o.regrow >= C.TREE_REGROW_DAYS && w.bgrid[i] < 0 && !Sim.isCamp(S, i) && !(w.road && (w.road[i] || w.roadJob[i])) && !(w.fence && (w.fence[i] || w.fenceJob[i])) &&
           !S.people.some((p) => p.alive && Math.floor(p.x) === o.x && Math.floor(p.y) === o.y)) {
           o.k = 'tree'; o.regrow = 0; G.W.refreshBlock(w, i);
         }
@@ -647,6 +668,10 @@
     lost += rot(S, 'carne', C.ROT_MEAT * rm * Te.rotMult(S, 'carne'));
     lost += rot(S, 'defumado', C.ROT_DEFUMADO * rm);
     lost += rot(S, 'seca', C.ROT_SECA * rm);
+    // Etapa 10: o que vem da roça dura (feijão e milho secos quase não estragam); ovo e leite, pouco
+    for (const k of ['feijao', 'milho', 'abobora', 'mandioca']) if (S.stock[k]) lost += rot(S, k, C.ROCA[k].rot * rm);
+    if (S.stock.ovos) lost += rot(S, 'ovos', C.ROT_OVOS * rm);
+    if (S.stock.leite) lost += rot(S, 'leite', C.ROT_LEITE * rm);
     S.stats.rottedToday = lost;
     Te.onRot(S, lost);   // ver comida estragar ensina a conservar
     const season = C.SEASONS[ck.season];
@@ -667,6 +692,7 @@
     G.Tech.daily(S);
     if (G.Obras) G.Obras.daily(S);
     if (G.Fauna) G.Fauna.daily(S);
+    if (G.Campo) G.Campo.daily(S);   // Etapa 10: roça, criação, descobertas do campo
     if (G.Life) G.Life.daily(S);
   }
   function rot(S, k, rate) {
@@ -695,6 +721,7 @@
     if (G.Narr) G.Narr.hourly(S);
     G.Tech.hourly(S);
     if (G.Obras) G.Obras.hourly(S);
+    if (G.Campo) G.Campo.hourly(S);
     if (G.Life) G.Life.hourly(S);
     checkGoals(S);
   }
@@ -722,7 +749,7 @@
   function checkGoals(S) {
     for (const g of S.goals) {
       if (g.done) continue;
-      const fn = GOAL_TEST[g.id] || G.Family.goalTest[g.id] || G.Tech.goalTest[g.id] || (G.Obras && G.Obras.goalTest[g.id]) || (G.Inv && G.Inv.goalTest[g.id]);
+      const fn = GOAL_TEST[g.id] || G.Family.goalTest[g.id] || G.Tech.goalTest[g.id] || (G.Obras && G.Obras.goalTest[g.id]) || (G.Inv && G.Inv.goalTest[g.id]) || (G.Bichos && G.Bichos.goalTest[g.id]) || (G.Campo && G.Campo.goalTest[g.id]);
       if (!fn || !fn(S)) continue;
       g.done = true;
       if (g.reward && S.god && !g.paid) { g.paid = true; S.god.poder += g.reward; }
@@ -766,7 +793,8 @@
     }
   }
   // missões pequenas das obras que entram em cada fase (Etapa 7)
-  const missions = (S, phase) => (G.Obras ? G.Obras.missions(phase) : []).concat(G.Inv ? G.Inv.missions(phase) : [])
+  const missions = (S, phase) => (G.Obras ? G.Obras.missions(phase) : []).concat(G.Inv ? G.Inv.missions(phase) : [], G.Bichos ? G.Bichos.missions(phase) : [],
+    G.Campo ? G.Campo.missions(phase) : [])
     .filter((m) => !S.goals.some((g) => g.id === m.id));
   Sim.checkGoals = checkGoals;
   Sim.daily = (S) => daily(S);   // para os testes
@@ -791,7 +819,9 @@
     p.cause = d.frio >= d.fome && d.frio >= d.sede ? 'frio' : d.sede >= d.fome ? 'sede' : 'fome';
     if ((d.raio || 0) > 0 && p.needs.saude <= 0 && (d.raio || 0) >= Math.max(d.frio, d.fome, d.sede)) p.cause = 'raio';
     if ((d.parto || 0) > 0 && (d.parto || 0) >= Math.max(d.frio, d.fome, d.sede, d.raio || 0)) p.cause = 'parto';
-    if ((d.lobo || 0) > 0 && d.lobo >= Math.max(d.frio, d.fome, d.sede, d.raio || 0, d.parto || 0)) p.cause = 'lobos';
+    // bichos (Etapa 9): lobo, onça, jacaré ou outro bicho; vence quem mais feriu
+    const beasts = [['lobos', d.lobo || 0], ['onca', d.onca || 0], ['jacare', d.jacare || 0], ['bicho', d.bicho || 0]].sort((a, b) => b[1] - a[1]);
+    if (beasts[0][1] > 0 && beasts[0][1] >= Math.max(d.frio, d.fome, d.sede, d.raio || 0, d.parto || 0)) p.cause = beasts[0][0];
     if (d.velhice) p.cause = 'velhice';
     S.stats.lastDeathAt = S.t;   // o Narrador dá um respiro depois de uma perda
     if (G.Narr) G.Narr.onDeath(S);
@@ -803,7 +833,8 @@
     const r = G.W.findNearest(w, Math.floor(p.y) * w.W + Math.floor(p.x),
       (i) => (!G.W.objAt(w, i) && w.bgrid[i] < 0 && !Sim.isCamp(S, i) && !G.IS_WATER[w.tile[i]] ? 1 : 0), 30);
     if (r) G.W.addObj(w, 'grave', r.idx % w.W, (r.idx / w.W) | 0, { name: p.name });
-    const causeTxt = { frio: 'de frio', sede: 'de sede', fome: 'de fome', raio: 'atingid' + (p.sex === 'F' ? 'a' : 'o') + ' por um raio', parto: 'no parto', velhice: 'de velhice', lobos: 'no ataque dos lobos' }[p.cause];
+    const causeTxt = { frio: 'de frio', sede: 'de sede', fome: 'de fome', raio: 'atingid' + (p.sex === 'F' ? 'a' : 'o') + ' por um raio', parto: 'no parto', velhice: 'de velhice', lobos: 'no ataque dos lobos',
+      onca: 'no ataque da onça', jacare: 'no ataque de um jacaré', bicho: 'atacad' + (p.sex === 'F' ? 'a' : 'o') + ' por um bicho' }[p.cause];
     const age = Sim.ageOf(S, p);
     Sim.chron(S, p.name + ' morreu ' + causeTxt + (age < 1 ? ', com poucos meses.' : ', ' + (age < 12 ? 'com ' : 'aos ') + age + (age === 1 ? ' ano.' : ' anos.')));
     G.Family.onDeath(S, p);
@@ -886,6 +917,7 @@
     }
     if (G.Narr) G.Narr.step(S, dt);   // lobos e viajantes
     if (G.Fauna) G.Fauna.step(S, dt);   // capivaras
+    if (G.Campo) G.Campo.step(S, dt);   // bichos de criação (Etapa 10)
     G.Tech.step(S, dt);   // moquém e jirau
     for (const p of S.people) if (p.alive && p.needs.saude <= 0) die(S, p);
   };
@@ -900,6 +932,8 @@
     if (G.Narr) G.Narr.init(S);
     G.Tech.init(S);
     if (G.Fauna) G.Fauna.init(S);
+    if (G.Bichos) G.Bichos.init(S);   // Etapa 9
+    if (G.Campo) G.Campo.init(S);   // Etapa 10
     if (G.Life) G.Life.init(S);
     fixGoals(S);
     if (!S.seen) {

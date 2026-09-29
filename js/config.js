@@ -3,10 +3,10 @@
 (function (G) {
   'use strict';
   G.CFG = {
-    VERSION: '0.8.0',
+    VERSION: '0.10.0',
     SAVE_KEY: 'genesis.save.v1',
     // endereço do Web App do Google Apps Script (termina em /exec). Vazio = jogo só local.
-    API_URL: 'https://script.google.com/macros/s/AKfycbzDy7z7jS8Xd9ejZINSNtR6_S7_3zmfqDaPa77NKVEoEFBY8N_F6-EHTvlsbX0-wGsQ/exec',
+    API_URL: '',
     CLOUD_SAVE_SEC: 180,
 
     // ---- mapa ----
@@ -53,7 +53,7 @@
     // ---- comida e água ----
     FRUIT_FOOD: 25, FISH_COOKED: 45, FISH_RAW: 22, WATER_DRINK: 40,
     START_STOCK: { madeira: 0, pedra: 0, agua: 0, frutas: 8, peixe: 0, carne: 0, defumado: 0, seca: 0, couro: 0, argila: 0, ferramentas: 0, roupas: 0,
-      tabuas: 0, fibra: 0, mantas: 0, redes: 0 },
+      tabuas: 0, fibra: 0, mantas: 0, redes: 0, feijao: 0, milho: 0, abobora: 0, mandioca: 0, ovos: 0, leite: 0 },
     ROT_FRUIT: 0.04, ROT_FISH: 0.08,            // parte do estoque que estraga por dia
     ROT_SEASON: [1, 1.5, 1, 0.3],               // verão apressa, inverno conserva
 
@@ -129,6 +129,14 @@
       tecelagem: { name: 'Tecelagem', a: 'a', key: 'L', w: 2, h: 2, cost: { madeira: 10, fibra: 6 }, work: 240, need: 'cestos', shop: { k: 'tecido', speed: 1 },
         desc: 'Tear de varas: o Ofício tece mantas (quem dorme com uma sente menos frio) e redes (o sono rende mais).',
         up: [{ name: 'Tear grande', cost: { tabuas: 8, fibra: 4 }, work: 240, shop: { k: 'tecido', speed: 2 }, desc: 'Tear de tábuas: manta e rede em metade do tempo.' }] },
+      // Etapa 10: o campo. A roça não pede material, só o trabalho de limpar o terreno (soil: não vai em areia nem em pedra)
+      roca: { name: 'Roça', a: 'a', key: 'H', w: 3, h: 3, cost: {}, work: 180, need: 'roca', soil: true, farm: { mult: 1 },
+        desc: 'Terra lavrada para plantar feijão, milho, abóbora, mandioca e, depois, algodão. O povo planta, capina e colhe (Roça nas Vontades).',
+        up: [{ name: 'Roça adubada', cost: { madeira: 4 }, work: 120, need: 'criacao', farm: { mult: 1.3 },
+          desc: 'Esterco do curral misturado na terra: a roça rende 30% mais.' }] },
+      curral: { name: 'Curral', a: 'o', key: 'Y', w: 3, h: 3, cost: { madeira: 12 }, work: 240, need: 'criacao', pen: { cap: 8 },
+        desc: 'Abrigo com cocho para os bichos de criação: 8 lugares (galinha e coelho ocupam meio; vaca, dois). De dia eles pastam em volta; de noite, dormem aqui.',
+        up: [{ name: 'Curral grande', cost: { madeira: 10, tabuas: 6 }, work: 240, pen: { cap: 14 }, desc: 'Cercado maior, com abrigo de tábuas: 14 lugares.' }] },
     },
     // nível 3 da barraca: a casa que o lugar pede (env: o que precisa ter em volta)
     HOUSES: {
@@ -169,7 +177,7 @@
     // ---- IA ----
     VONTADE_W: [0, 0.5, 1, 1.6],
     WORK_BASE: 32, WORK_CAP: 75, CRITICAL: 15, CRITICAL_BONUS: 70, EVENING_BONUS: 18,
-    DEFAULT_VONTADES: { frutas: 2, agua: 2, madeira: 2, pedra: 1, pesca: 2, caca: 2, argila: 1, construir: 2, oficio: 2, conservar: 2, fogo: 3 },
+    DEFAULT_VONTADES: { frutas: 2, agua: 2, madeira: 2, pedra: 1, pesca: 2, caca: 2, argila: 1, construir: 2, oficio: 2, conservar: 2, fogo: 3, roca: 2, criacao: 2 },
     REEVAL_MIN: 20,
 
     // ---- Deus (Etapa 2) ----
@@ -196,9 +204,14 @@
     COUPLE_TALKS: 6, COUPLE_DAILY: 0.1,
     // Etapa 6: relações livres. Até 4 pares do outro sexo por pessoa; cada par que já tem pesa 0,6 na chance de outro
     // (no máximo 2 vezes); mulher em idade de ter filho e sem par homem tem o dobro de chance com um homem (é daí que o povo cresce);
-    // pares do mesmo sexo existem, sem filhos, até 1 por pessoa e à parte (não tiram lugar dos outros).
+    // pares do mesmo sexo existem, sem filhos, à parte (não tiram lugar dos outros).
     // Visita: quem tem par em outra barraca dorme lá em parte das noites (divide a cama do par; aperta a barraca em até 2 lugares).
-    BONDS_MAX: 4, BONDS_SAME_MAX: 1, BOND_MORE: 0.6, BOND_FERTILE: 2, BOND_SAME_SEX: 0.25, BOND_AGE_MAX: 55, VISIT_HOME: 30, VISIT_SQUEEZE: 2,
+    // 0.10 (pedido do jogador): até 3 pares do mesmo sexo (antes 1), e eles nascem com um pouco mais de facilidade.
+    BONDS_MAX: 4, BONDS_SAME_MAX: 3, BOND_MORE: 0.6, BOND_FERTILE: 2, BOND_SAME_SEX: 0.4, BOND_AGE_MAX: 55, VISIT_HOME: 30, VISIT_SQUEEZE: 2,
+    // noites picantes (só adultos, sem parentes próximos; desliga no menu): quem tem dois pares dormindo na mesma casa,
+    // e os dois se dão (conversam ou também são par), tem TRIO_NIGHT de chance por noite de uma noite a três; depois da
+    // festa, um grupo de 4 ou mais adultos ligados por pares tem PARTY_MANY de chance de esticar a noite junto
+    TRIO_NIGHT: 0.15, TRIO_TALKS: 4, PARTY_MANY: 0.3, PARTY_MANY_MIN: 4, PARTY_MANY_MAX: 8,
     FERTILE_MAX: 45, BIRTH_SPACING_Y: 1.5, CONCEIVE_NIGHT: 0.06,
     PREGNANCY_Y: 0.75, PREG_KNOWN_DAYS: 6, LATE_PREG_DAYS: 10,
     LABOR_H: 4, BIRTH_RISK: 0.15, BIRTH_RISK_TENT: -0.05, BIRTH_RISK_FIRE: -0.03, BIRTH_RISK_WEAK: 0.1,
@@ -280,8 +293,99 @@
     AGULHA_COLD: 0.65, AGULHA_WEAR: 0.67,      // roupa costurada: 35% menos frio (em vez de 25%) e dura metade a mais
     REDE_FISH: 1.35, REDE_MAX: 2,              // rede de pesca: fisga 35% mais, e cada pescaria traz até 2 peixes a mais
     ARCO_R: 4.4, ARCO_HIT: 0.15, ARCO_SHOTS: 4,   // arco e flecha: atira de longe, acerta mais, e a flecha não espanta o bando
-    VASO_FOOD: 1.25,                           // vasos: peixe e carne cozidos no vaso sustentam 25% mais
+    VASO_FOOD: 1.25,                           // vasos: peixe, carne, ovo e roça cozidos no vaso sustentam 25% mais
     TAMBOR_PARTY: 1.5,                         // tambor: a festa aproxima 50% mais
     FLAUTA_STORY: 0.4,                         // flauta: 40% das noites de história viram música
+
+    // ---- Bichos (Etapa 9) ----
+    // hab: onde vive (agua: beira d'água · mata: dentro ou na borda da floresta · mataAgua: mata perto da água ·
+    // campo: campo aberto · lago: beira de lago ou rio largo). n: quantos bandos no mapa · herd: tamanho do bando ao
+    // nascer · max: teto do bando · speed/flee: andar e fugir · see: arisco, foge de quem chega a essa distância
+    // (0 = só foge quando atacado; com see maior que o alcance da lança, só o arco chega) · night: anda de noite e
+    // se esconde de dia · hp: acertos para abater · carne/couro: o que rende · birth: dias entre filhotes ·
+    // charge: chance de partir para cima de quem atacou · bite: o dano da mordida (ou da chifrada)
+    BICHOS: {
+      capivara: { name: 'Capivara', art: 'uma capivara', hab: 'agua', n: 5, herd: [3, 5], max: 7, speed: 0.6, flee: 1.5, see: 0, hp: 1, carne: 8, couro: 2, birth: 15,
+        desc: 'Pasta em bando na beira d’água.' },
+      veado: { name: 'Veado', art: 'um veado', hab: 'mata', n: 3, herd: [2, 4], max: 5, speed: 0.8, flee: 2.2, see: 4, hp: 1, carne: 10, couro: 2, birth: 22,
+        desc: 'Arisco: foge de quem chega a 4 passos.' },
+      porco: { name: 'Porco-do-mato', art: 'um porco-do-mato', hab: 'mata', n: 2, herd: [4, 6], max: 8, speed: 0.7, flee: 1.4, see: 0, hp: 2, carne: 12, couro: 2, birth: 16, charge: 0.5, bite: 12,
+        desc: 'Anda em vara. Ferido, parte para cima de quem atacou.' },
+      paca: { name: 'Paca', art: 'uma paca', hab: 'mataAgua', n: 3, herd: [1, 2], max: 3, speed: 0.7, flee: 1.8, see: 3, hp: 1, carne: 7, couro: 1, birth: 26, night: true,
+        desc: 'Sai de noite, perto da água na mata; de dia fica na toca.' },
+      tatu: { name: 'Tatu', art: 'um tatu', hab: 'campo', n: 3, herd: [1, 2], max: 3, speed: 0.4, flee: 0.9, see: 2, hp: 1, carne: 5, couro: 0, birth: 26,
+        desc: 'Fuça o campo devagar. Fácil de pegar.' },
+      anta: { name: 'Anta', art: 'uma anta', hab: 'mataAgua', n: 2, herd: [1, 2], max: 3, speed: 0.6, flee: 1.3, see: 3, hp: 3, carne: 24, couro: 4, birth: 40, charge: 0.25, bite: 16,
+        desc: 'O maior bicho da mata. Pede três acertos e às vezes se vira contra quem ataca.' },
+      jacu: { name: 'Jacu', art: 'um jacu', hab: 'mata', n: 3, herd: [2, 4], max: 6, speed: 0.5, flee: 2.8, see: 4, hp: 1, carne: 3, couro: 0, birth: 14, bird: true,
+        desc: 'Ave da mata. Voa longe quando alguém chega perto.' },
+      tapiti: { name: 'Tapiti', art: 'um tapiti', hab: 'campo', n: 3, herd: [2, 4], max: 7, speed: 0.9, flee: 2.4, see: 3.5, hp: 1, carne: 2, couro: 1, birth: 10,
+        desc: 'Coelho do campo. Rápido, e dá cria depressa.' },
+      jacare: { name: 'Jacaré', art: 'um jacaré', hab: 'lago', n: 3, herd: [1, 1], max: 1, speed: 0.5, flee: 1.2, see: 0, hp: 2, carne: 12, couro: 3, birth: 0, bite: 20, predator: true,
+        desc: 'Toma sol na beira do lago e ataca quem trabalha perto da água.' },
+    },
+    CACA_NOVO: 10, CACA_REPETE: 3,  // na escolha da presa: bicho nunca caçado vale mais; o da última caçada, um pouco menos
+    // jacaré: chance por hora de atacar quem trabalha a até JACARE_R passos dele na beira d'água; depois do ataque,
+    // o povo evita aquela margem por JACARE_AVOID_D dias. Mora num lago a JACARE_DIST passos ou mais do acampamento; de
+    // madrugada, às vezes (JACARE_MOVE) muda de lugar dentro de JACARE_ROAM passos, e às vezes (JACARE_LURE) vai para
+    // perto de onde o povo andou pescando. Entre um ataque e outro, no mundo todo, pelo menos JACARE_GAP_D dias
+    JACARE_GAP_D: 90, JACARE_R: 2.5, JACARE_HOUR: 0.1, JACARE_AVOID_D: 30, JACARE_COOL_D: 2, JACARE_DIST: 10, JACARE_ROAM: 12, JACARE_MOVE: 0.15, JACARE_LURE: 0.2,
+    // luta: quem tem lança (ou arco) revida quando um bicho ataca, e quem está perto e armado vem ajudar
+    LUTA_HIT: 0.35, LUTA_MIN: 6, LUTA_R: 7, LUTA_HELP: 3, LOBO_HP: 2, LOBO_KILL: 0.4,
+    // onça (Narrador): ronda o acampamento por 2 ou 3 noites; ataca quem está sozinho no escuro; de dia some na mata
+    ONCA_NIGHTS: [2, 3], ONCA_HP: 4, ONCA_BITE: 28, ONCA_SEE: 6, ONCA_SPEED: 1.3, ONCA_CARNE: 14, ONCA_COURO: 4,
+    // caçada à onça: na manhã depois de um ataque, 2 ou 3 adultos armados vão atrás dela na toca (e só entram juntos);
+    // acuada, ela dá botes (ONCA_POUNCE da mordida, a cada ONCA_POUNCE_MIN minutos, em quem estiver a até ONCA_POUNCE_R) e,
+    // se os caçadores recuam ou a luta passa de ONCA_ACUADA minutos, escapa e vai embora de vez
+    ONCA_HUNT: 3, ONCA_HUNT_H: [7, 12], ONCA_ACUADA: 30, ONCA_POUNCE: 0.6, ONCA_POUNCE_MIN: 8, ONCA_POUNCE_R: 5,
+
+    // ---- Campo (Etapa 10) ----
+    // descobertas do campo: prática em horas de trabalho, como as invenções (uma árvore, várias ao mesmo tempo)
+    CAMPO_NEED: { roca: 120, algodao: 70, cerca: 70, criacao: 75 },
+    // culturas (numa roça de 3 x 3): dias até madurar no ritmo da primavera, porções colhidas, comida de cada porção
+    // (cozida no fogo; crua, o que diz raw; 0 = não se come cru), o que estraga por dia no estoque. A mandioca é a
+    // única que cresce no inverno (devagar) e espera muito tempo no chão depois de madura; o algodão vira fibra
+    ROCA: {
+      feijao: { name: 'Feijão', days: 12, yield: 40, food: 30, raw: 0, rot: 0.004, ripe: 8 },
+      milho: { name: 'Milho', days: 18, yield: 54, food: 28, raw: 14, rot: 0.006, ripe: 10 },
+      abobora: { name: 'Abóbora', days: 20, yield: 36, food: 40, raw: 18, rot: 0.01, ripe: 12 },
+      mandioca: { name: 'Mandioca', days: 30, yield: 70, food: 34, raw: 0, rot: 0.03, ripe: 40, winter: 0.5 },
+      algodao: { name: 'Algodão', days: 24, yield: 24, fibra: true, ripe: 10 },
+    },
+    ROCA_ORDER: ['feijao', 'milho', 'abobora', 'mandioca', 'algodao'],
+    ROCA_GROW: [1, 1.15, 0.75, 0],   // ritmo do crescimento por estação (primavera, verão, outono, inverno)
+    ROCA_SECA: 0.4,                  // na seca a roça quase para (a Chuva de Deus rega: +ROCA_CHUVA_D dias)
+    ROCA_CHUVA_D: 2,
+    ROCA_PLANT_MIN: 120, ROCA_WEED_MIN: 60, ROCA_HARVEST_MIN: 90,
+    ROCA_WEED_AT: 0.45, ROCA_WEED_DAYS: 4, ROCA_WEED_LOSS: 0.35,   // o mato sai no meio do crescimento; sem capina em 4 dias, perde 35%
+    ROCA_SPOIL_DAY: 0.1,             // madura e esquecida no pé: perde 10% por dia (no inverno, 25%)
+    ROCA_FARTURA: 1.25,              // tempo de fartura: a roça que está crescendo rende 25% mais
+    ROCA_PRAGA: 0.5,                 // praga (gafanhotos): metade da colheita de uma roça
+    ROCA_RAID_R: 16, ROCA_RAID_DAY: 0.08, ROCA_RAID_LOSS: 0.1, ROCA_RAID_MAX: 0.4, ROCA_RAID_GAP: 3,   // bicho do mato come roça aberta (um estrago a cada 3 dias, no máximo)
+    // criação: tamanho no curral (lugares), dias entre crias (fora do inverno), quantos nascem, o que dá por dia
+    // (ovos, leite) ou por ano (lã, na tosquia da primavera), o que rende no abate, e a ração de inverno (porções por dia)
+    CRIA: {
+      galinha: { name: 'Galinha', male: 'Galo', art: 'uma galinha', size: 0.5, birth: 8, litter: 2, carne: 4, couro: 0, ovos: 0.5, feed: 0.1, speed: 0.55 },
+      coelho: { name: 'Coelho', art: 'um coelho', size: 0.5, birth: 9, litter: 2, carne: 4, couro: 1, feed: 0.1, speed: 0.6 },
+      porco: { name: 'Porco', art: 'um porco', size: 1, birth: 20, litter: 2, carne: 18, couro: 1, feed: 0.4, speed: 0.5 },
+      ovelha: { name: 'Ovelha', male: 'Carneiro', art: 'uma ovelha', size: 1, birth: 30, litter: 1, carne: 12, couro: 2, la: 3, feed: 0.3, speed: 0.5 },
+      gado: { name: 'Vaca', male: 'Boi', art: 'uma vaca', size: 2, birth: 45, litter: 1, carne: 36, couro: 5, leite: 3, feed: 0.6, speed: 0.45 },
+    },
+    CRIA_ORDER: ['galinha', 'coelho', 'porco', 'ovelha', 'gado'],
+    CRIA_ROAM: 5,                    // solto (curral sem cerca), pasta a até 5 passos do curral
+    CRIA_HUNGRY_DAYS: 6,             // no inverno sem ração: depois de 6 dias, os bichos começam a morrer
+    CRIA_KEEP: 2,                    // o povo deixa sempre um casal de cada espécie
+    CRIA_WOLF_H: 0.25, CRIA_ONCA_H: 0.12,   // de noite, chance por hora de o lobo (curral aberto) ou a onça (pula a cerca) levar um bicho
+    COLLECT_MIN: 20, FEED_MIN: 15, ABATE_MIN: 40,
+    OVOS_FOOD: 18, LEITE_FOOD: 14, LEITE_SEDE: 12, ROT_OVOS: 0.06, ROT_LEITE: 0.5,
+    // mascate: passa trocando bichos de criação por coisas do povo (valor de cada coisa e o que o povo não troca)
+    MASCATE_FIRST_D: [2, 4], MASCATE_D: [20, 34], MASCATE_LATER_D: [50, 80],
+    MASCATE_OFFER: { galinha: [1, 2, 9], coelho: [1, 1, 8], porco: [1, 1, 16], ovelha: [1, 1, 20], gado: [1, 1, 34] },   // machos, fêmeas, preço
+    TRADE_VALUE: { couro: 2.5, ferramentas: 3, roupas: 5, mantas: 5, redes: 4, tabuas: 1.5, defumado: 1, seca: 0.8, feijao: 0.8, milho: 0.6,
+      abobora: 0.6, mandioca: 0.5, fibra: 0.8, carne: 0.6, peixe: 0.5, argila: 0.3, pedra: 0.2, madeira: 0.15 },
+    TRADE_KEEP: { couro: 4, ferramentas: 3, tabuas: 6, fibra: 8, madeira: 40, pedra: 20, argila: 12 },
+    // cercas: 1 madeira e 12 minutos por passo; quem passa pela cerca pula (3 vezes mais devagar); cerca em cima
+    // de caminho de terra ou de pedra vira porteira (o povo passa, bicho não). Área cercada: até 1.600 passos
+    CERCA_WOOD: 1, CERCA_WORK: 12, CERCA_PASS: 3, CERCA_MAX_AREA: 1600,
   };
 })(globalThis.G = globalThis.G || {});

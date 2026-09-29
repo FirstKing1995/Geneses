@@ -62,6 +62,8 @@
       i += n;
     }
   }
+  O.packRuns = packRuns;
+  O.unpackRuns = unpackRuns;
   O.pack = function (S) {
     const w = S.world, o = S.obras || {};
     const foot = [];

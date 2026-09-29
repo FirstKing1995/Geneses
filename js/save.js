@@ -37,13 +37,24 @@
     out.ents = (n.ents || []).map((e) => { const o = Object.assign({}, e); o.path = null; o.pathI = 0; o.x = +e.x.toFixed(2); o.y = +e.y.toFixed(2); delete o.px; delete o.py; return o; });
     return out;
   }
-  // capivaras vão sem o caminho (refazem ao carregar)
+  // bichos: cada um numa lista curta (Etapa 9: são mais de cem), sem o caminho (refazem ao carregar):
+  // id, espécie, bando, x, y, lado, estado, vida, grande e, só quando tem, o resto (abatido em, água do jacaré, sustos)
+  const FAUNA_ST = ['pasto', 'fuga', 'morta', 'investida'];
   function packFauna(f) {
     if (!f) return null;
-    const out = Object.assign({}, f);
-    out.ents = (f.ents || []).map((e) => { const o = Object.assign({}, e); o.path = null; o.pathI = 0; o.x = +e.x.toFixed(2); o.y = +e.y.toFixed(2); delete o.px; delete o.py; return o; });
+    const out = Object.assign({}, f), sps = Object.keys(G.CFG.BICHOS || { capivara: 1 });
+    delete out.ents;
+    out.spList = sps;
+    out.entsC = (f.ents || []).filter((e) => !e.gone).map((e) => {
+      const a = [e.id, Math.max(0, sps.indexOf(e.sp || 'capivara')), e.h, +e.x.toFixed(2), +e.y.toFixed(2), e.dir | 0, Math.max(0, FAUNA_ST.indexOf(e.state)), e.hp === undefined ? -1 : e.hp, e.big ? 1 : 0];
+      const x = {};
+      for (const k of ['deadAt', 'wx', 'wy', 'scaredUntil', 'nextBite', 'hidden']) if (e[k] !== undefined && e[k] !== false && e[k] !== 0) x[k] = e[k];
+      if (Object.keys(x).length) a.push(x);
+      return a;
+    });
     return out;
   }
+  Save.FAUNA_ST = FAUNA_ST;
   // vida: a história em andamento não vai (acaba com o save); a festa marcada vai
   function packLife(l) {
     if (!l) return null;
@@ -74,7 +85,7 @@
       chron: S.chron, goals: S.goals, stats: S.stats, over: S.over, arrived: S.arrived,
       people, buildings: S.buildings, objs, graves: extra, god: S.god, seen: packSeen(S.seen), narr: packNarr(S.narr),
       tech: S.tech || null, fauna: packFauna(S.fauna), opts: S.opts || null, life: packLife(S.life),
-      obras: G.Obras ? G.Obras.pack(S) : null,
+      obras: G.Obras ? G.Obras.pack(S) : null, campo: G.Campo ? G.Campo.pack(S) : null,
       goalsPhase: S.goalsPhase || 1, era: S.era || '', famInit: !!S.famInit, savedAt: G.Net ? G.Net.now() : Date.now(),
     };
   };
@@ -106,7 +117,7 @@
       nextPid: d.nextPid, nextBid: d.nextBid, chron: d.chron, events: [], goals: d.goals, stats: d.stats,
       over: d.over, arrived: d.arrived, god: d.god || null, narr: d.narr || null, savedAt: d.savedAt || 0,
       tech: d.tech || null, fauna: d.fauna || null, opts: d.opts || null, life: d.life || null,
-      obras: d.obras || null,
+      obras: d.obras || null, campo: d.campo || null,
       seen: unpackSeen(d.seen, w.W * w.H),
       goalsPhase: d.goalsPhase || 1, era: d.era || '', famInit: !!d.famInit,
     };

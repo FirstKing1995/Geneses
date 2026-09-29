@@ -52,7 +52,61 @@ r = g.post({ action: 'apagar', token: t1 });
 ok(r.ok && g.post({ action: 'carregar', token: t1 }).dados === null, 'apagar mundo limpa o save');
 r = g.post({ action: 'qualquer' });
 ok(!r.ok && /desconhecida/.test(r.erro), 'ação desconhecida responde erro');
+// 0.10: sessões vencidas saem de uma vez quando passam do limite; as válidas ficam
+{
+  const sh = g.gas._sheets.get('sessoes'), velha = Date.now() - 1000;
+  for (let i = 0; i < 320; i++) sh.appendRow(['velha' + i, 'x', velha - 86400000, velha]);
+  const antes = sh.getLastRow();
+  r = g.post({ action: 'entrar', email: 'maria@exemplo.com', senha: 'segredo3' });
+  const depois = sh.getLastRow();
+  ok(r.ok && antes > 320 && depois < 20 && g.post({ action: 'carregar', token: r.token }).ok && g.post({ action: 'carregar', token: tm }).ok, 'passou de 300 sessões: as vencidas saem de uma vez e as válidas continuam (' + antes + ' → ' + depois + ' linhas)');
+}
+// erro passageiro do servidor vem marcado, para o jogo tentar de novo
+{
+  const was = g.gas.LockService.getScriptLock;
+  g.ctx.LockService.getScriptLock = () => ({ waitLock: () => { throw new Error('Lock timeout'); }, releaseLock: () => {} });
+  r = g.post({ action: 'salvar', token: tm, dados: save, resumo: {} });
+  ok(!r.ok && r.falha === true && /Lock timeout/.test(r.erro), 'trava ocupada: erro marcado como passageiro (o jogo tenta de novo)');
+  g.ctx.LockService.getScriptLock = was;
+}
+// o cliente (js/net.js): tenta de novo o que pode se repetir, não repete o cadastro, e o tempo limite vira aviso claro
+async function cliente() {
+  const vm = require('vm'), fs = require('fs'), path = require('path');
+  let calls = [], plan = [];
+  const fakeFetch = async (url, o) => {
+    const body = JSON.parse(o.body); calls.push(body.action);
+    const step = plan.shift() || 'ok';
+    if (step === 'rede') throw new Error('rede');
+    if (step === 'html') return { text: async () => '<html>erro</html>' };
+    if (step === 'falha') return { text: async () => JSON.stringify({ ok: false, falha: true, erro: 'Erro no servidor: Lock timeout', now: Date.now() }) };
+    if (step === 'demora') return new Promise((res, rej) => o.signal.addEventListener('abort', () => rej(new Error('abort'))));
+    return { text: async () => JSON.stringify({ ok: true, now: Date.now(), token: 't', usuario: { nome: 'D', email: 'd@x.com' } }) };
+  };
+  const store = new Map();
+  const ctx = vm.createContext({ G: { CFG: { API_URL: 'https://exemplo/exec' } }, fetch: fakeFetch, AbortController, setTimeout, clearTimeout, Date, JSON, Math, Promise, URLSearchParams,
+    location: { search: '' }, localStorage: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) } });
+  ctx.globalThis = ctx;
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'net.js'), 'utf8'), ctx);
+  const Net = ctx.G.Net;
+  calls = []; plan = ['rede', 'ok'];
+  let r = await Net.call('entrar', { email: 'd@x.com', senha: '123456' });
+  ok(r.ok && calls.length === 2, 'cliente: falha de rede no entrar tenta mais uma vez e entra');
+  calls = []; plan = ['html', 'ok'];
+  r = await Net.call('carregar', { token: 't' });
+  ok(r.ok && calls.length === 2, 'cliente: resposta estranha (página de erro) tenta mais uma vez');
+  calls = []; plan = ['falha', 'ok'];
+  r = await Net.call('salvar', { token: 't', dados: '{}' });
+  ok(r.ok && calls.length === 2, 'cliente: erro passageiro do servidor tenta mais uma vez');
+  calls = []; plan = ['rede', 'ok'];
+  r = await Net.call('cadastrar', { nome: 'D', email: 'd@x.com', senha: '123456' });
+  ok(!r.ok && r.offline && calls.length === 1, 'cliente: o cadastro não se repete sozinho (quem cuida é o login, que tenta entrar com os mesmos dados)');
+  calls = []; plan = ['demora'];
+  r = await Net.call('entrar', { email: 'd@x.com', senha: '123456' }, 60);
+  ok(!r.ok && r.lenta && /demorou/.test(r.erro) && calls.length === 1, 'cliente: servidor que demora demais vira aviso claro (sem repetir a espera)');
+}
 const t0 = Date.now(); for (let i = 0; i < 5; i++) g.post({ action: 'entrar', email: 'maria@exemplo.com', senha: 'segredo3' });
 console.log('\nentrar (com hash de senha) leva ~' + Math.round((Date.now() - t0) / 5) + ' ms no Node');
-console.log(fails ? fails + ' falha(s)' : 'tudo certo');
-process.exit(fails ? 1 : 0);
+cliente().then(() => {
+  console.log(fails ? fails + ' falha(s)' : 'tudo certo');
+  process.exit(fails ? 1 : 0);
+});

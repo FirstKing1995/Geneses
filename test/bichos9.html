@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><title>bichos da Etapa 9</title>
+<style>body{margin:0;background:#262b44;color:#ead4aa;font:12px monospace} canvas{image-rendering:pixelated;display:block}</style></head>
+<body><canvas id="sheet"></canvas>
+<script src="../js/core.js"></script><script src="../js/config.js"></script><script src="../js/world.js"></script>
+<script src="../js/sim.js"></script><script src="../js/family.js"></script><script src="../js/life.js"></script><script src="../js/tech.js"></script><script src="../js/invencoes.js"></script>
+<script src="../js/obras.js"></script><script src="../js/fauna.js"></script><script src="../js/bichos.js"></script><script src="../js/ai.js"></script>
+<script src="../js/god.js"></script><script src="../js/narrator.js"></script><script src="../js/save.js"></script>
+<script src="../js/art.js"></script>
+<script>
+// folha dos bichos (5x) sobre a grama: 3 quadros de lado, a esquerda, o abatido; o jacu voando; o jacaré na água; os ícones
+const A = G.Art;
+const sh = document.getElementById('sheet'); sh.width = 1400; sh.height = 1000;
+const x = sh.getContext('2d'); x.imageSmoothingEnabled = false;
+x.fillStyle = '#58a447'; x.fillRect(0, 0, 1400, 1000);
+let px = 8, py = 8, rowH = 0;
+function put(img, s, sx, sy, sw, sh2) { s = s || 5; const w = sw || img.width, h = sh2 || img.height; if (px + w * s > 1392) { px = 8; py += rowH + 10; rowH = 0; } x.drawImage(img, sx || 0, sy || 0, w, h, px, py, w * s, h * s); px += w * s + 10; rowH = Math.max(rowH, h * s); }
+function nl() { px = 8; py += rowH + 12; rowH = 0; }
+for (const sp of ['veado', 'porco', 'paca', 'tatu', 'anta', 'jacu', 'tapiti', 'jacare', 'onca']) {
+  const d = A.BEAST[sp], s = sp === 'jacare' || sp === 'onca' || sp === 'anta' ? 4 : 5;
+  put(A.beastSheet(sp), s);
+  if (sp !== 'onca') put(A.beastSheet(sp, true), s, 0, 0, d.w, d.h);
+  put(A.beastDead(sp), s);
+  if (sp === 'jacu') put(A.birdFly(), 5);
+  if (sp === 'jacare') { x.fillStyle = '#0e93d4'; x.fillRect(px - 4, py - 4, A.JACARE_WATER_W * 5 * 2 + 8, A.JACARE_WATER_H * 5 * 2 + 8); put(A.jacareWater(), 5); }
+  nl();
+}
+put(A.capiSheet(0), 4); put(A.wolfSheet(0), 4);
+document.title = 'pronto';
+</script></body></html>

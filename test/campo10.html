@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"><title>campo da Etapa 10</title>
+<style>body{margin:0;background:#262b44;color:#ead4aa;font:12px monospace} canvas{image-rendering:pixelated;display:block}</style></head>
+<body><canvas id="sheet"></canvas>
+<script src="../js/core.js"></script><script src="../js/config.js"></script><script src="../js/world.js"></script>
+<script src="../js/sim.js"></script><script src="../js/family.js"></script><script src="../js/life.js"></script><script src="../js/tech.js"></script><script src="../js/invencoes.js"></script>
+<script src="../js/obras.js"></script><script src="../js/fauna.js"></script><script src="../js/bichos.js"></script><script src="../js/campo.js"></script><script src="../js/ai.js"></script>
+<script src="../js/god.js"></script><script src="../js/narrator.js"></script><script src="../js/save.js"></script>
+<script src="../js/art.js"></script>
+<script>
+// folha do campo (4x) sobre a grama: roças nas quatro fases, curral, cercas, bichos de criação e ícones
+const A = G.Art;
+const sh = document.getElementById('sheet'); sh.width = 1400; sh.height = 2000;
+const x = sh.getContext('2d'); x.imageSmoothingEnabled = false;
+x.fillStyle = '#58a447'; x.fillRect(0, 0, 1400, 2000);
+let px = 8, py = 8, rowH = 0;
+function put(img, s, sx, sy, sw, sh2) { s = s || 4; const w = sw || img.width, h = sh2 || img.height; if (px + w * s > 1392) { px = 8; py += rowH + 10; rowH = 0; } x.drawImage(img, sx || 0, sy || 0, w, h, px, py, w * s, h * s); px += w * s + 10; rowH = Math.max(rowH, h * s); }
+function nl() { px = 8; py += rowH + 12; rowH = 0; }
+// roça composta: terra + 3 fileiras
+function field(k, stage, weeds, kind) {
+  const [c, cx] = A.mk(48, 62);
+  cx.drawImage(A.rocaSoil(kind || 'warm'), 0, 14);
+  if (weeds) cx.drawImage(A.rocaWeeds(), 0, 14);
+  if (k) for (let r = 0; r < 3; r++) cx.drawImage(A.rocaRow(k, stage, r), 0, 14 + r * 16 - 14);
+  return c;
+}
+for (const k of ['feijao', 'milho', 'abobora', 'mandioca', 'algodao']) { for (let s = 0; s < 4; s++) put(field(k, s, s === 2 && k === 'milho'), 3); nl(); }
+put(field(null, 0, false), 3); put(field(null, 0, false, 'rich'), 3); put(field('mandioca', 2, false, 'snow'), 3);
+{ const [c, cx] = A.mk(48, 48); cx.drawImage(A.rocaSoil('warm'), 0, 0); cx.drawImage(A.rocaStubble(false), 0, 0); put(c, 3); }
+nl();
+for (const lv of [1, 2]) { const [c, cx] = A.mk(48, 60); cx.drawImage(A.curral(lv, 'ground'), 0, 0); cx.drawImage(A.curral(lv, 'back'), 0, 0); cx.drawImage(A.curral(lv, 'front'), 0, 0); put(c, 4); }
+// cercas: uma volta de 4 x 3 com uma porteira
+{ const [c, cx] = A.mk(16 * 6, 16 * 5 + 20); const ring = new Set(); for (let i = 0; i < 5; i++) { ring.add(i + ',0'); ring.add(i + ',3'); } for (let j = 0; j < 4; j++) { ring.add('0,' + j); ring.add('4,' + j); }
+  const list = [...ring].map((s) => s.split(',').map(Number)).sort((a, b) => a[1] - b[1]);
+  const gate = (i, j) => j === 3 && i === 2;
+  for (const [i, j] of list) { const e = ring.has((i + 1) + ',' + j), s = ring.has(i + ',' + (j + 1));
+    const m = (e ? 1 : 0) | (s ? 2 : 0) | (e && (gate(i, j) || gate(i + 1, j)) ? 4 : 0) | (s && (gate(i, j) || gate(i, j + 1)) ? 8 : 0) | (gate(i, j) ? 0 : 16);
+    cx.drawImage(A.fence(m), 8 + i * 16 - 0, 8 + j * 16 - 10); }
+  put(c, 4); }
+nl();
+for (const k of ['galinha', 'galo', 'pinto', 'coelho', 'porco', 'ovelha', 'carneiro', 'vaca', 'boi']) { put(A.criaSheet(k), 5); if (k === 'galinha' || k === 'coelho' || k === 'vaca' || k === 'boi' || k === 'porco' || k === 'ovelha') put(A.criaSheet(k, true), 5, 0, 0, A.CRIA[k].w, A.CRIA[k].h); }
+nl();
+for (const k of ['roca', 'algodao', 'cerca', 'galinha', 'feijao', 'milho', 'abobora', 'mandioca', 'ovos', 'leite', 'curral', 'mascate', 'praga', 'cria:vaca', 'cria:porco', 'cria:ovelha', 'cria:coelho']) put(A.icon(k), 5);
+nl();
+for (const k of ['feijao', 'milho', 'abobora', 'mandioca', 'ovos', 'leite']) put(A.item10(k), 6);
+document.title = 'pronto';
+</script></body></html>
