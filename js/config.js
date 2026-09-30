@@ -3,10 +3,10 @@
 (function (G) {
   'use strict';
   G.CFG = {
-    VERSION: '0.10.0',
+    VERSION: '0.11.0',
     SAVE_KEY: 'genesis.save.v1',
     // endereço do Web App do Google Apps Script (termina em /exec). Vazio = jogo só local.
-    API_URL: 'https://script.google.com/macros/s/AKfycbzDy7z7jS8Xd9ejZINSNtR6_S7_3zmfqDaPa77NKVEoEFBY8N_F6-EHTvlsbX0-wGsQ/exec',
+    API_URL: '',
     CLOUD_SAVE_SEC: 180,
 
     // ---- mapa ----
@@ -137,6 +137,11 @@
       curral: { name: 'Curral', a: 'o', key: 'Y', w: 3, h: 3, cost: { madeira: 12 }, work: 240, need: 'criacao', pen: { cap: 8 },
         desc: 'Abrigo com cocho para os bichos de criação: 8 lugares (galinha e coelho ocupam meio; vaca, dois). De dia eles pastam em volta; de noite, dormem aqui.',
         up: [{ name: 'Curral grande', cost: { madeira: 10, tabuas: 6 }, work: 240, pen: { cap: 14 }, desc: 'Cercado maior, com abrigo de tábuas: 14 lugares.' }] },
+      // Etapa 11: a estátua de Deus (nível 3). Pronta, Deus a consagra com um milagre próprio, que acontece sozinho
+      estatua: { name: 'Estátua', a: 'a', key: '', w: 2, h: 2, cost: { pedra: 30, madeira: 10 }, work: 480, god: { reach: 1, reza: 1 },
+        desc: 'A imagem de Deus em pedra. Consagrada, faz o milagre dela sozinho; quem tem fé reza ali de manhã.',
+        up: [{ name: 'Estátua com altar', cost: { pedra: 20, tabuas: 6 }, work: 360, god: { reach: 1.5, reza: 2 },
+          desc: 'Um altar de pedra aos pés dela: o milagre da estátua vai metade mais longe, e quem reza ali ganha o dobro de fé.' }] },
     },
     // nível 3 da barraca: a casa que o lugar pede (env: o que precisa ter em volta)
     HOUSES: {
@@ -323,6 +328,9 @@
         desc: 'Coelho do campo. Rápido, e dá cria depressa.' },
       jacare: { name: 'Jacaré', art: 'um jacaré', hab: 'lago', n: 3, herd: [1, 1], max: 1, speed: 0.5, flee: 1.2, see: 0, hp: 2, carne: 12, couro: 3, birth: 0, bite: 20, predator: true,
         desc: 'Toma sol na beira do lago e ataca quem trabalha perto da água.' },
+      // Etapa 11: o bicho que Deus cria (não nasce no mundo: aparece com o grande ato; o nome é o que o jogador der)
+      criatura: { name: 'Luzeiro', art: 'um luzeiro', hab: 'deus', n: 0, herd: [4, 5], max: 9, speed: 0.55, flee: 1.4, see: 0, hp: 1, carne: 14, couro: 3, birth: 8,
+        desc: 'Criado por Deus: manso, pasta perto da aldeia, dá cria depressa e muita carne.', created: true },
     },
     CACA_NOVO: 10, CACA_REPETE: 3,  // na escolha da presa: bicho nunca caçado vale mais; o da última caçada, um pouco menos
     // jacaré: chance por hora de atacar quem trabalha a até JACARE_R passos dele na beira d'água; depois do ataque,
@@ -387,5 +395,58 @@
     // cercas: 1 madeira e 12 minutos por passo; quem passa pela cerca pula (3 vezes mais devagar); cerca em cima
     // de caminho de terra ou de pedra vira porteira (o povo passa, bicho não). Área cercada: até 1.600 passos
     CERCA_WOOD: 1, CERCA_WORK: 12, CERCA_PASS: 3, CERCA_MAX_AREA: 1600,
+
+    // ---- Deus (Etapa 11) ----
+    // Glória: todo o Poder que o povo já deu (a fé de cada hora, os agradecimentos, as orações atendidas, as metas);
+    // gastar Poder não tira glória. O nível pede glória e fiéis (7 anos ou mais, com fé de FIEL_FE para cima).
+    // Medido em 20 anos em três mundos (0.11): quem atende as orações chega ao nível 2 com 0,6 a 0,7 ano, ao 3 com 3,5
+    // a 4,1, ao 4 com 8 a 10 e ao 5 com 12 a 14; quem larga junta glória (a fé de cada hora rende), mas fica com 1 a 3
+    // fiéis, e por isso no nível 1 ou 2.
+    GOD_LEVELS: [
+      { name: 'Espírito', glory: 0, fieis: 0 },
+      { name: 'Guardião', glory: 500, fieis: 2 },
+      { name: 'Deus do Povo', glory: 2500, fieis: 4 },
+      { name: 'Deus Antigo', glory: 8000, fieis: 7 },
+      { name: 'Deus Maior', glory: 20000, fieis: 10 },
+    ],
+    FIEL_FE: 70, FIEL_AGE: 7,
+    // cético que vê sinais demais se converte: CONVERTE_SINAIS sinais e fé de CONVERTE_FE para cima.
+    // Sinais: um milagre visto de perto (no máximo um a cada 2 dias), a própria oração atendida, a Cura no corpo, a
+    // pregação ouvida, o sonho da Revelação
+    CONVERTE_SINAIS: 24, CONVERTE_FE: 65,
+    SINAL: { milagre: 1, atendida: 2, curado: 3, sermao: 2, sonho: 4 },
+    // o escolhido: quem chegou à fé inteira (100) nos últimos FE100_DAYS dias e ainda tem 90, com 16 anos ou mais.
+    // Ungir custa UNGIR_COST; um por vez no nível 3, dois no 4, três no 5. Abaixo de GRACA_FE, perde a graça
+    UNGIR_COST: 150, UNGIR_AGE: 16, FE100_DAYS: 5, GRACA_FE: 70, ESCOLHIDOS: [0, 0, 0, 1, 2, 3],
+    ESCOLHIDO_CURA: 8, ESCOLHIDO_HEAL: 40,          // Mãos que curam: cada cura gasta 8 de Poder e dá 40 de saúde
+    SERMAO_GAP_D: 2, SERMAO_FE: 5, SERMAO_PODER: 1, SERMAO_LONGE: 15,   // Palavra: uma pregação a cada 2 dias, de tardinha, por quem está a até 15 passos do fogo
+    LUZ_R: 3.5, LUZ_HEAT: 10,                        // Luz: lobo e onça não chegam; quem está perto se aquece
+    // Bênção (nível 2): um lugar abençoado por BENCAO_H horas; quem trabalha ali rende BENCAO_MULT
+    BENCAO_COST: 25, BENCAO_R: 6, BENCAO_H: 48, BENCAO_MULT: 1.5,
+    // grandes atos. Estátua: obra do povo (nível 3; uma por nível acima do 2), consagrada com um milagre próprio
+    ESTATUA_LV: 3, ESTATUAS: [0, 0, 0, 1, 2, 3], CONSAGRAR_COST: 400,
+    ESTATUA_R: 6, ESTATUA_HEAT: 12, ESTATUA_CHUVA_D: 8, ESTATUA_CURA: 30, ESTATUA_CURA_R: 8, ESTATUA_TROVAO_R: 10,
+    REZA_FE: 3, REZA_PODER: 1, REZA_MIN: 30,        // quem tem fé reza de manhã ao pé da estátua
+    // espécie nova (nível 4): um bicho manso para caçar, um peixe que enche os rios ou uma árvore que dá fruta o ano todo
+    ESPECIE_LV: 4, ESPECIE_COST: 1500, ARVORE_N: 6, ARVORE_MAX: 5, ARVORE_DAYS: 2, PEIXE_FISH: 1.35,
+    // conhecimento avançado (nível 5): a roda, a escrita, a medicina
+    SABER_LV: 5, SABER_COST: 2500,
+    RODA_CARRY: 1.4, RODA_BUILD: 1.25, ESCRITA_XP: 1.5, ESCRITA_STORY: 2, ESCRITA_PRAT: 1.25,
+    MEDICINA_BIRTH: 0.5, MEDICINA_REGEN: 1.5, MEDICINA_OLD: 0.6,
+    // os dons (um a cada nível, do 2 ao 5): os números de cada um
+    DOM: {
+      fogoH: 24, fogoR: 7,                        // Fogo Sagrado: o Calor dura 24 h e vai a 7 passos
+      maosCost: 12, maosR: 2, maosHeal: 0.5,      // Mãos de Luz: a Cura custa 12 e cura pela metade quem está a até 2 passos
+      ceuCost: 10, ceuFruit: 2, ceuRoca: 3,       // Céu Generoso: a Chuva custa 10, enche mais os arbustos, dobra a água e adianta a roça 3 dias
+      trovaoCost: 10, trovaoR: 2.6, trovaoMult: 2,   // Trovão: o Raio custa 10, alcança o bicho mais longe e dobra madeira e pedra
+      ouvidoMult: 2,                              // Ouvido Atento: orações esperam o dobro e agradecem o dobro
+      olhosMult: 1.5,                             // Olhos do Céu: a névoa se abre metade mais longe
+      sonhosCost: 40, sonhosMin: 0.15,            // Sonhos Claros
+      ventreConceive: 1.5, ventreRisk: 0.5,       // Ventre Abençoado
+      sentinelaR: 2, sentinelaBite: 0.75,         // Sentinela
+      terraRoca: 1.2, terraBush: 1.3,             // Mão na Terra
+      temorObed: 0.3,                             // Temor Sagrado (e ninguém entra em greve)
+      chamaFloor: 50, chamaPoder: 1.2,            // Fé que Aquece
+    },
   };
 })(globalThis.G = globalThis.G || {});

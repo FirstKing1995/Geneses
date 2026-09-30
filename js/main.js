@@ -139,9 +139,20 @@
     const g = G.Narr.pending(S);
     if (g) askChoice(g.id);
     if (S.stats.eraEnd && !S.stats.eraSeen) showEra();   // a era fechou com o jogo fechado
+    if (G.Deus && G.Deus.pending(S)) setTimeout(showGodPending, 900);   // Deus subiu de nível com o jogo fechado
   }
   // uma janela por vez: espera a outra fechar
-  const modalOpen = () => ['#modal-birth', '#modal-choice', '#modal-away', '#modal-era'].some((id) => !$(id).hidden);
+  const modalOpen = () => ['#modal-birth', '#modal-choice', '#modal-away', '#modal-era', '#modal-dom'].some((id) => !$(id).hidden);
+  // Etapa 11: Deus subiu de nível (o nome que o povo dá, o dom): pausa e pergunta, uma janela por vez
+  function showGodPending() {
+    if (!S || S.safe || mode !== 'game' || !G.Deus || !G.Deus.pending(S)) return;
+    if (!$('#modal-dom').hidden) return;
+    if (modalOpen()) { setTimeout(showGodPending, 700); return; }
+    $('#modal-deus').hidden = true;
+    const before = speed;
+    setSpeed(0);
+    UI.godPending(() => { setSpeed(before || 1); save(); });
+  }
   // fim da Era da Família: pausa e mostra o que o povo construiu
   function showEra() {
     if (!S || S.safe || mode !== 'game' || S.stats.eraSeen) return;
@@ -299,7 +310,7 @@
     if (mode !== 'game' || !S) return;
     if (casting === kind) { cancelCasting(); return; }
     const why = God.canCast(S, kind);
-    if (why) { UI.toast(why + (S.god.poder < God.MIRACLES[kind].cost ? ' O Poder nasce da fé do povo.' : ''), 'warn'); return; }
+    if (why) { UI.toast(why + (S.god.poder < God.cost(S, kind) ? ' O Poder nasce da fé do povo.' : ''), 'warn'); return; }
     cancelPlacing(); stopRoad(true);
     casting = kind;
     document.body.dataset.placing = 'milagre';
@@ -313,7 +324,7 @@
   function aimCast(wx, wy) {
     if (!casting) return;
     const tx = Math.floor(wx / TS), ty = Math.floor(wy / TS);
-    R.overlay.cast = { kind: casting, x: tx, y: ty, r: God.MIRACLES[casting].r, ok: Sim.isSeen(S, tx, ty) &&
+    R.overlay.cast = { kind: casting, x: tx, y: ty, r: God.radius(S, casting), ok: Sim.isSeen(S, tx, ty) &&
       (casting !== 'cura' || !!God.curaTarget(S, tx, ty)) && (casting !== 'revelacao' || !!God.dreamTarget(S, tx, ty)) };
   }
   function cancelCasting() {
@@ -641,6 +652,7 @@
     else if (k === 'u') startCasting('chuva');
     else if (k === 'e') startCasting('cura');
     else if (k === 'v') startCasting('revelacao');
+    else if (k === 'z') startCasting('bencao');   // Etapa 11
     else if (k === 'm' || k === 'j' || k === 'o' || k === 'g' || k === 'k' || k === 'l' || k === 'h' || k === 'y') {
       const t = { m: 'moquem', j: 'jirau', o: 'forno', g: 'armazem', k: 'marcenaria', l: 'tecelagem', h: 'roca', y: 'curral' }[k];
       if (G.Tech.buildOpen(S, t)) startPlacing(t);
@@ -653,7 +665,8 @@
     else if (k === 'n' && G.Audio) { const on = G.Audio.toggle(); if (UI.syncSound) UI.syncSound(); UI.toast(on ? 'Som ligado.' : 'Som desligado.', ''); }
     else if (k === 'c') UI.sheet(document.body.dataset.sheet === 'cronica' ? '' : 'cronica');
     else if (k === 'escape') {
-      if (!$('#menu').hidden) $('#menu').hidden = true; else if (placing) cancelPlacing(); else if (casting) cancelCasting(); else if (roading) stopRoad();
+      if (!$('#modal-deus').hidden) $('#modal-deus').hidden = true;
+      else if (!$('#menu').hidden) $('#menu').hidden = true; else if (placing) cancelPlacing(); else if (casting) cancelCasting(); else if (roading) stopRoad();
       else if (UI.sel && (UI.sel.person || UI.sel.building)) UI.select(0, 0);
       else if (document.body.dataset.sheet) UI.sheet('');
       else UI.closeAll();   // no computador: fecha os painéis abertos
@@ -730,6 +743,7 @@
       // lobos à vista: o tempo volta para 1x (dá tempo de agir)
       alarm: () => { if (speed > 1) setSpeed(1); },
       era: showEra,
+      godPending: showGodPending,
       panels: () => positionHint(),
       birth: (pid) => {
         if (!S || S.safe || mode !== 'game') return;

@@ -102,6 +102,7 @@
     let s = 1 + C.SKILL_BONUS * (sk ? lvl(p, sk) : 0);
     if (curS) s *= Fam.workFactor(curS, p);
     if (curS && wk) s *= Tech.speed(curS, p, wk);   // ferramenta de pedra
+    if (curS && wk && curS.god && curS.god.blessings && curS.god.blessings.length && G.Deus) s *= G.Deus.blessAt(curS, p.x, p.y);   // a Bênção (Etapa 11)
     if (has(p, 'Trabalhador')) s *= 1.15;
     if (has(p, 'Preguiçoso')) s *= 0.85;
     if (p.needs.energia < 15) s *= 0.8;
@@ -541,11 +542,13 @@
   ACT.aquecer = {
     start(S, p, a) {
       const w = S.world, fires = litFires(S), auras = S.god ? S.god.auras : [];
-      if (fires.length || auras.length) {
+      const lights = G.Deus && S.god && S.god.pending ? G.Deus.lights(S).filter((L) => L.bid) : [];   // a estátua do fogo (Etapa 11)
+      if (fires.length || auras.length || lights.length) {
         // fogueira acesa ou o Calor de Deus: o que estiver mais perto
         const r = route(S, p, (i) => {
           const x = i % w.W + 0.5, y = ((i / w.W) | 0) + 0.5;
           if (fires.some((f) => Math.hypot(x - f.x - 0.5, y - f.y - 0.5) <= C.FIRE_FULL_R)) return 1;
+          if (lights.some((L) => Math.hypot(x - L.x, y - L.y) <= L.r * 0.55)) return 1;
           return auras.some((g) => Math.hypot(x - g.x - 0.5, y - g.y - 0.5) <= g.r * 0.55) ? 1 : 0;
         }, 140, true);
         if (r) { a.src = 'fogo'; return true; }
@@ -664,7 +667,7 @@
       const f = Li.campFire(S, true);
       if (!f || !toFireRing(S, p, f, 0.9, 2.2)) return false;
       if (!p.path) setPath(p, [tileOf(S, p)]);
-      Li.startStory(S, p, f);
+      Li.startStory(S, p, f, a.hint === 'sermao' && !!(G.Deus && G.Deus.sermonDue(S, p)));   // a Palavra (Etapa 11): pregação
       a.fire = f.id;
       return true;
     },
@@ -673,13 +676,14 @@
       if (!st || st.teller !== p.id) return FAIL;
       if (a.stage === 'go') {
         a.walk = (a.walk || 0) + dt;
-        if (a.walk > 60 || S.ck.hour >= 20.5) { G.Life.endStory(S, p, false); return FAIL; }   // longe demais: fica para outro dia
+        if (a.walk > (st.sermon ? 130 : 60) || S.ck.hour >= 20.5) { G.Life.endStory(S, p, false); return FAIL; }   // longe demais: fica para outro dia (o profeta vem de mais longe)
         if (moving(p)) return RUN;
         if (p.stuck) return FAIL;
         a.stage = 'tell'; a.t = 0; st.on = true;
         const f = Sim.building(S, st.fire); if (f) { face(p, f.x, f.y); G.Life.lightFire(S, f, 1); }   // fogo apagado: acende para contar
-        say(S, p, st.music ? 'chamaMusica' : 'chamaHistoria', 1, true, 'historia');
-        S.events.push({ k: 'story', on: true, x: p.x, y: p.y });
+        if (st.sermon) Sim.say(S, p, G.Deus.sermonCall(S), true, 'god');
+        else say(S, p, st.music ? 'chamaMusica' : 'chamaHistoria', 1, true, 'historia');
+        S.events.push({ k: 'story', on: true, x: p.x, y: p.y, sermon: !!st.sermon });
         for (const q of S.people) if (q !== p && q.alive) q.nextEval = Math.min(q.nextEval, S.t);   // quem está por perto pensa se vem ouvir
       }
       a.t += dt;
@@ -731,6 +735,93 @@
       if (st && st.id === a.st && (a.heard || 0) < 15) { const i = st.listeners.indexOf(p.id); if (i >= 0) st.listeners.splice(i, 1); }
     },
   };
+  // ---------- Etapa 11: Deus ----------
+  // um lugar livre em volta de um ponto (a estátua), fora das obras
+  function toRing(S, p, cx, cy, r0, r1, maxCost) {
+    const w = S.world, taken = new Set();
+    for (const q of S.people) {
+      if (q === p || !q.alive || q.carriedBy) continue;
+      taken.add(tileOf(S, q));
+      if (q.path && q.path.length) taken.add(q.path[q.path.length - 1]);
+    }
+    const ring = (i) => {
+      const x = i % w.W + 0.5, y = ((i / w.W) | 0) + 0.5, d = Math.hypot(x - cx, y - cy);
+      return d >= r0 && d <= r1 && w.bgrid[i] < 0 ? 1 : 0;
+    };
+    return route(S, p, (i) => (ring(i) && !taken.has(i) ? 1 : 0), maxCost || 90) || route(S, p, ring, maxCost || 90);
+  }
+  // reza da manhã: vai até a estátua, reza um pouco e segue o dia
+  ACT.rezar = {
+    start(S, p, a) {
+      const b = G.Deus && G.Deus.prayerStatue(S, p);
+      if (!b || !toRing(S, p, b.x + 1, b.y + 1, 1.4, 2.9, 120)) return false;
+      if (!p.path) setPath(p, [tileOf(S, p)]);
+      a.b = b.id;
+      return true;
+    },
+    run(S, p, a, dt) {
+      const b = Sim.building(S, a.b);
+      if (!b || !b.built) return FAIL;
+      if (a.stage === 'go') {
+        a.walk = (a.walk || 0) + dt;
+        if (a.walk > 90) return FAIL;
+        if (moving(p)) return RUN;
+        if (p.stuck) return FAIL;
+        a.stage = 'pray'; a.t = 0;
+        face(p, b.x + 0.5, b.y + 0.5);
+        Sim.say(S, p, G.Deus.prayLine(S, p, p.id + S.ck.day), true, 'god');
+      }
+      a.t += dt;
+      if (a.t >= C.REZA_MIN) { G.Deus.onPrayed(S, p, b); return DONE; }
+      return RUN;
+    },
+  };
+  // o escolhido que cura: vai até quem está doente ou num parto difícil e cura com as mãos
+  const healSpot = (S, t) => (t.carriedBy ? person(S, t.carriedBy) || t : t);
+  function closeTo(S, p, c, r) {
+    if (c.inTent) { const b = Sim.building(S, c.inTent); if (b) return p.x >= b.x - 1.6 && p.x <= b.x + b.w + 1.6 && p.y >= b.y - 1.6 && p.y <= b.y + b.h + 1.6; }
+    return Math.hypot(c.x - p.x, c.y - p.y) <= (r || 1.9);
+  }
+  function healRoute(S, p, t) {
+    const c = healSpot(S, t);
+    if (c.inTent) { const b = Sim.building(S, c.inTent); if (b) return toBuilding(S, p, b); }
+    const w = S.world, qi = tileOf(S, c), qx = qi % w.W, qy = (qi / w.W) | 0;
+    return route(S, p, (i) => (Math.max(Math.abs(i % w.W - qx), Math.abs(((i / w.W) | 0) - qy)) <= 1 ? 1 : 0), 90, true);
+  }
+  ACT.curar = {
+    start(S, p, a) {
+      const t = person(S, a.q);
+      if (!t || !G.Deus || !G.Deus.needsHeal(S, t) || S.god.poder < C.ESCOLHIDO_CURA) return false;
+      a.tgt = t.id;
+      if (closeTo(S, p, healSpot(S, t))) { setPath(p, [tileOf(S, p)]); return true; }
+      if (!healRoute(S, p, t)) return false;
+      if (!p.path) setPath(p, [tileOf(S, p)]);
+      return true;
+    },
+    run(S, p, a, dt) {
+      const t = person(S, a.tgt);
+      if (!t || !t.alive || !G.Deus.needsHeal(S, t)) return DONE;   // alguém (ou Deus) já curou
+      const c = healSpot(S, t);
+      if (a.stage === 'go') {
+        a.walk = (a.walk || 0) + dt;
+        if (a.walk > 120) return FAIL;
+        if (!closeTo(S, p, c)) {
+          if (moving(p)) return RUN;
+          a.tries = (a.tries || 0) + 1;
+          if (p.stuck || a.tries > 4 || !healRoute(S, p, t)) return FAIL;
+          return RUN;
+        }
+        p.path = null;
+        a.stage = 'heal'; a.t = 0;
+        face(p, Math.floor(c.x), Math.floor(c.y));
+      }
+      a.t += dt;
+      if (!closeTo(S, p, c, 2.6)) { a.stage = 'go'; return healRoute(S, p, t) ? RUN : FAIL; }
+      if (a.t >= 5) return G.Deus.heal(S, p, t) ? DONE : FAIL;
+      return RUN;
+    },
+  };
+
   // festa: em volta do fogo, pulando de um lugar para outro da roda
   ACT.festa = {
     start(S, p, a) {
@@ -1795,7 +1886,7 @@
     let sd = urg(n.energia) * 100 + (ctx.night ? 38 : 0) + (ctx.evening ? (st === 'crianca' ? 30 : 10) : 0) + (n.energia < 8 ? C.CRITICAL_BONUS : 0);
     if (!ctx.night && n.energia > 35) sd -= 25;
     add('dormir', sd);
-    const heat = ctx.fireLit || ctx.tents > 0 || (S.god && S.god.auras.length > 0);
+    const heat = ctx.fireLit || ctx.tents > 0 || (S.god && S.god.auras.length > 0) || (G.Deus && S.god && S.god.pending && G.Deus.lights(S).some((L) => L.bid));
     const cal = feltCold(S, p);
     if (p.tempHere < C.COMFORT && heat && cal < 85) add('aquecer', urg(cal) * 115 + crit(cal));
     const cp = chatPartner(S, p);
@@ -1807,9 +1898,24 @@
       if (life.story && life.story.teller !== p.id) {
         // par e filhos de quem conta vêm com mais vontade
         const t = person(S, life.story.teller), close = t && (Fam.isPartner(p, t) || p.mother === t.id || p.father === t.id);
-        if (G.Life.canListen(S, p, life.story)) add('ouvir', 44 + urg(n.social) * 30 + (st === 'crianca' || st === 'jovem' ? 18 : 0) + (close ? 10 : 0));
+        const holy = life.story.sermon && p.fe >= 60 ? 8 : 0;   // quem tem fé vem ouvir a pregação com mais vontade
+        if (G.Life.canListen(S, p, life.story)) add('ouvir', 44 + urg(n.social) * 30 + (st === 'crianca' || st === 'jovem' ? 18 : 0) + (close ? 10 : 0) + holy);
       }
-      else if (!life.story && G.Life.canTell(S, p)) add('historia', G.Life.tellScore(S, p));
+      else if (!life.story && G.Life.canTell(S, p)) {
+        // o profeta prega (Etapa 11), se der tempo de chegar ao fogo (anda-se 8 minutos por passo)
+        const f = G.Deus && G.Deus.sermonDue(S, p) ? G.Life.campFire(S, true) : null;
+        if (f && Math.hypot(f.x + 0.5 - p.x, f.y + 0.5 - p.y) < C.SERMAO_LONGE) add('historia', G.Life.tellScore(S, p) + 20, { hint: 'sermao' });
+        else add('historia', G.Life.tellScore(S, p));
+      }
+    }
+    // Etapa 11: o escolhido que cura vai até quem precisa; de manhã, quem tem fé reza ao pé da estátua
+    if (G.Deus && S.god && S.god.pending && st !== 'bebe') {
+      if (p.escolhido && p.escolhido.power === 'cura') {
+        const t = G.Deus.healTarget(S, p);
+        if (t) add('curar', t.labor ? 110 : t.needs.saude < 20 ? 100 : 86, { q: t });   // acima de qualquer trabalho
+      }
+      const pr = G.Deus.wantPray(S, p);
+      if (pr > 0) add('rezar', pr);
     }
     for (const wk of WORK) {
       const v = S.vontades[VONT[wk] || wk] | 0;
@@ -1895,7 +2001,7 @@
       // o fogo está morrendo e ninguém foi cuidar dele: quem sente frio vai reacender (é o que aquece todo mundo).
       // Sem isso, na nevasca todos corriam para o fogo que se apagava e ninguém buscava lenha.
       if (ctx.fireNeedsFuel && S.stock.madeira > 0 && (S.vontades.fogo | 0) > 0 && Fam.canWork(S, p, 'fogo') && !othersDoing(S, p, 'fogo')) return 'fogo';
-      if (ctx.fireLit || ctx.tents > 0 || (S.god && S.god.auras.length > 0)) return 'aquecer';
+      if (ctx.fireLit || ctx.tents > 0 || (S.god && S.god.auras.length > 0) || (G.Deus && S.god && S.god.pending && G.Deus.lights(S).some((L) => L.bid))) return 'aquecer';
     }
     // quem está gelando termina de se aquecer antes de ir dormir (senão alterna entre os dois e congela)
     if (n.energia < 8 && a.type !== 'dormir' && a.type !== 'fogo' && !(a.type === 'aquecer' && cal < C.SLEEP_BY_FIRE)) return 'dormir';
@@ -1932,7 +2038,8 @@
           const cur = list.find((c) => c.type === a.type);
           const cs = cur ? cur.score : 0;
           // festa e história chamam: basta valer um pouco mais que o que está fazendo
-          const call = (best.type === 'festa' || best.type === 'ouvir') && best.score > cs + 5;
+          // o profeta larga o trabalho para pregar, e quem cura, para curar (Etapa 11)
+          const call = (best.type === 'festa' || best.type === 'ouvir' || best.type === 'curar' || (best.type === 'historia' && best.hint === 'sermao')) && best.score > cs + 5;
           if (call || best.score > cs * 1.3 + 10) { end(S, p, 0); AI.decide(S, p); }
         }
       }
@@ -2021,8 +2128,12 @@
         }
         return 'Conversando com ' + nm;
       }
-      case 'historia': return st === 'tell' ? 'Contando uma história ao pé do fogo' : 'Indo contar uma história';
-      case 'ouvir': { const t = person(S, a.teller); return st === 'listen' ? 'Ouvindo a história de ' + (t ? t.name : '…') : 'Indo ouvir uma história'; }
+      case 'historia': { const sm = S.life && S.life.story && S.life.story.teller === p.id && S.life.story.sermon;
+        return sm ? (st === 'tell' ? 'Pregando a palavra de ' + G.Deus.call(S) + ' ao pé do fogo' : 'Indo pregar ao pé do fogo') : st === 'tell' ? 'Contando uma história ao pé do fogo' : 'Indo contar uma história'; }
+      case 'ouvir': { const t = person(S, a.teller), sm = S.life && S.life.story && S.life.story.id === a.st && S.life.story.sermon;
+        return sm ? (st === 'listen' ? 'Ouvindo a pregação de ' + (t ? t.name : '…') : 'Indo ouvir a pregação') : st === 'listen' ? 'Ouvindo a história de ' + (t ? t.name : '…') : 'Indo ouvir uma história'; }
+      case 'rezar': return st === 'pray' ? 'Rezando ao pé da estátua de ' + G.Deus.call(S) : 'Indo rezar na estátua';
+      case 'curar': { const t = person(S, a.q); return st === 'heal' ? 'Curando ' + (t ? t.name : '…') + ' com as mãos' : 'Indo curar ' + (t ? t.name : '…'); }
       case 'festa': return st === 'dance' ? 'Dançando na festa' : 'Indo para a festa';
       case 'vagar': return 'Dando uma volta';
       case 'brincar': return st === 'play' ? 'Brincando' : 'Indo brincar';

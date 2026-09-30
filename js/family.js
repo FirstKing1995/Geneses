@@ -53,6 +53,7 @@
     const st = F.stage(S, p);
     let f = st === 'jovem' ? 1.5 : st === 'crianca' ? 1.2 : 1;
     if ((st === 'jovem' || st === 'crianca') && S.people.some((q) => q.alive && q !== p && F.stage(S, q) === 'idoso' && Math.hypot(q.x - p.x, q.y - p.y) < 6)) f *= 1.25;
+    if (G.Deus && G.Deus.saber(S, 'escrita')) f *= C.ESCRITA_XP;   // a escrita (Etapa 11): todos aprendem mais rápido
     return f;
   };
   F.nursing = (S, p) => p.sex === 'F' && S.people.some((b) => b.alive && b.mother === p.id && F.stage(S, b) === 'bebe' && b.carriedBy === p.id);
@@ -281,7 +282,7 @@
       for (const m of men) sum += F.afeto(w, m);
       let r = S.rng.next() * sum, m = men[0];
       for (const x of men) { r -= F.afeto(w, x); if (r <= 0) { m = x; break; } }
-      if (S.rng.next() < C.CONCEIVE_NIGHT * (F.afeto(w, m) / 100)) {
+      if (S.rng.next() < C.CONCEIVE_NIGHT * (F.afeto(w, m) / 100) * (G.Deus && G.Deus.dom(S, 'ventre') ? C.DOM.ventreConceive : 1)) {
         w.preg = { t0: S.t, due: S.t + Math.round(C.PREGNANCY_Y * YEAR()), father: m.id, known: false };
       }
     }
@@ -400,7 +401,12 @@
     if (S.buildings.some((b) => b.built && G.Sim.def(b).cap)) risk += C.BIRTH_RISK_TENT;
     if (S.ctx && S.ctx.fireLit) risk += C.BIRTH_RISK_FIRE;
     if (w.needs.saude < 50 || w.needs.fome < 25) risk += C.BIRTH_RISK_WEAK;
-    const hard = !S.safe && S.rng.next() < Math.max(0.02, risk);
+    // Etapa 11: o Ventre Abençoado e a medicina cortam o risco; perto da estátua da cura o parto nunca é difícil
+    const Dz = G.Deus;
+    if (Dz && Dz.dom(S, 'ventre')) risk *= C.DOM.ventreRisk;
+    if (Dz && Dz.saber(S, 'medicina')) risk *= C.MEDICINA_BIRTH;
+    let hard = !S.safe && S.rng.next() < Math.max(0.02, risk);
+    if (hard && Dz && Dz.safeBirth(S, w)) { hard = false; S.stats.statueBirths = (S.stats.statueBirths || 0) + 1; }
     w.labor = { t0: S.t, until: S.t + C.LABOR_H * 60, hard, helped: false };
     G.AI.abort(S, w);
     if (hard) Sm.toast(S, 'O parto de ' + w.name + ' está difícil. Ela vai precisar de você.', 'bad');
@@ -530,7 +536,7 @@
   }
   function oldAge(S, p, age) {
     if (S.safe || age < C.OLD_AGE) return;
-    const yearly = C.OLD_DEATH_BASE + (age - C.OLD_AGE) * C.OLD_DEATH_STEP;
+    const yearly = (C.OLD_DEATH_BASE + (age - C.OLD_AGE) * C.OLD_DEATH_STEP) * (G.Deus && G.Deus.saber(S, 'medicina') ? C.MEDICINA_OLD : 1);   // a medicina adia a velhice
     if (S.rng.next() < yearly / C.YEAR_DAYS) { p.dmg.velhice = 999; p.needs.saude = -999; }   // abaixo de zero: a cura natural do passo não salva
   }
 

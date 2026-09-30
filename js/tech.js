@@ -115,7 +115,7 @@
     if (!open) return;
     const w = TEACH[open][key];
     if (!w) return;
-    T.addPractice(S, open, w * dt / 60, p);
+    T.addPractice(S, open, w * dt / 60 * (G.Deus ? G.Deus.pratMult(S) : 1), p);   // a escrita (Etapa 11) apressa
   };
   T.addPractice = function (S, id, h, p) {
     const t = S.tech;
@@ -164,7 +164,9 @@
   // o que ela entrega: a que o jogador escolheu na janela das Descobertas (se já dá), senão a próxima da trilha,
   // senão a invenção mais adiantada (Etapa 8), senão a do campo (Etapa 10). Só vale o que o povo já começou a entender.
   const openAny = (S, id) => !!id && (T.open(S) === id || !!(G.Inv && G.Inv.isOpen(S, id)) || !!(G.Campo && G.Campo.isOpen(S, id)));
-  T.revealable = (S, id) => openAny(S, id) && T.progress(S, id) >= C.REVELACAO_MIN;
+  // Sonhos Claros (Etapa 11): a Revelação já vale com menos prática
+  T.revMin = (S) => (G.Deus && G.Deus.dom(S, 'sonhos') ? C.DOM.sonhosMin : C.REVELACAO_MIN);
+  T.revealable = (S, id) => openAny(S, id) && T.progress(S, id) >= T.revMin(S);
   T.revealTarget = function (S) {
     if (!S.tech) return null;
     const aim = S.tech.aim;
@@ -184,7 +186,7 @@
       return S.stats.firstFire ? 'Ainda não há o que revelar.' : 'Ainda não há o que revelar: falta a primeira fogueira.';
     }
     const id = cands.sort((a, b) => T.progress(S, b) - T.progress(S, a))[0], pr = T.progress(S, id);
-    return 'O povo ainda não está pronto para entender ' + T.DISC[id].name.toLowerCase() + ' (' + Math.floor(pr * 100) + '% da prática; precisa de ' + Math.round(C.REVELACAO_MIN * 100) + '%).';
+    return 'O povo ainda não está pronto para entender ' + T.DISC[id].name.toLowerCase() + ' (' + Math.floor(pr * 100) + '% da prática; precisa de ' + Math.round(T.revMin(S) * 100) + '%).';
   };
   T.reveal = function (S, p) {
     const id = T.revealTarget(S);
@@ -221,12 +223,14 @@
     if (T.hasTool(S, p) && (wk === 'madeira' || wk === 'pedra' || wk === 'construir' || wk === 'argila' || wk === 'caca' || wk === 'roca'))
       s = wk === 'madeira' && T.known(S, 'machado') ? C.MACHADO_BONUS : C.TOOL_BONUS;
     if (wk === 'construir' && T.known(S, 'corda')) s *= C.CORDA_BUILD;
+    if (wk === 'construir' && G.Deus && G.Deus.saber(S, 'roda')) s *= C.RODA_BUILD;   // o carrinho de mão (Etapa 11)
     if (wk === 'oficio' && T.known(S, 'faca')) s *= C.FACA_OFICIO;
     return s;
   };
-  T.fishMult = (S, p) => (T.known(S, 'anzol') && T.hasTool(S, p) ? C.ANZOL_FISH : 1) * (T.known(S, 'rede') ? C.REDE_FISH : 1);
-  T.carryMult = (S) => (T.known(S, 'cestos') ? C.CESTO_CARRY : 1);
-  T.biteMult = (S, p) => (T.known(S, 'lanca') && T.hasTool(S, p) ? C.LANCA_BITE : 1);
+  // Etapa 11: o peixe criado por Deus, o carrinho de mão (a roda) e a Sentinela
+  T.fishMult = (S, p) => (T.known(S, 'anzol') && T.hasTool(S, p) ? C.ANZOL_FISH : 1) * (T.known(S, 'rede') ? C.REDE_FISH : 1) * (G.Deus && G.Deus.species(S, 'peixe') ? C.PEIXE_FISH : 1);
+  T.carryMult = (S) => (T.known(S, 'cestos') ? C.CESTO_CARRY : 1) * (G.Deus && G.Deus.saber(S, 'roda') ? C.RODA_CARRY : 1);
+  T.biteMult = (S, p) => (T.known(S, 'lanca') && T.hasTool(S, p) ? C.LANCA_BITE : 1) * (G.Deus && G.Deus.dom(S, 'sentinela') ? C.DOM.sentinelaBite : 1);
   T.coldMult = (p, S) => (p.roupa ? (S && T.known(S, 'agulha') ? C.AGULHA_COLD : C.ROUPA_COLD) : 1);   // costurada com agulha, mais quente
   // quantas ferramentas guardar: quem trabalha (12+) e ainda não tem, mais uma folga
   T.workers = (S) => S.people.filter((p) => p.alive && !p.carriedBy && Fam().age(S, p) >= 12);

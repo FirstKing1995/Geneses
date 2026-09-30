@@ -140,6 +140,9 @@
         b.fe <= 35 ? pick(S, ['Acho que não. É a gente e a gente.', 'Se olha, anda distraído.']) : 'Às vezes acho que sim.'];
     } },
     { w: 0.5, ok: (S) => S.god && S.god.miracles > 0, make(S, a, b) {
+      // Etapa 11: depois que o povo dá um nome a Deus, o papo muda
+      const n = S.god.name;
+      if (n) return ['Você reza pra ' + n + '?', b.fe >= 60 ? 'Todo dia. ' + n + ' ouve a gente.' : b.fe >= 40 ? 'Às vezes. Quando aperta.' : 'Não sei se ' + n + ' escuta.'];
       return ['Será que ele tem nome, o lá de cima?', b.fe >= 50 ? 'Deve ter. Um dia ele conta pra gente.' : 'Se tem, nunca disse.'];
     } },
     { w: 2, ok: (S) => recentDisc(S, 20), make(S) {
@@ -394,6 +397,7 @@
     const l = S.life;
     if (!l || l.story || l.storyDay === S.ck.day || !calmEvening(S)) return false;
     if (p.carriedBy || p.labor || age(S, p) < 14 || !fine(p)) return false;
+    if (G.Deus && S.god && S.god.pending && G.Deus.sermonFirst(S, p)) return false;   // Etapa 11: a vez é do profeta
     const f = L.campFire(S, true);
     if (!f) return false;
     // alguém para ouvir
@@ -437,11 +441,13 @@
   const MUSIC_OPEN = ['Hoje eu vou tocar.', 'Escutem essa.', 'Essa eu aprendi com o vento.', 'Essa é das antigas.'];
   const MUSIC_END = ['Essa é pra quem já se foi.', 'E pra quem ainda vai chegar.', 'Pronto. Agora dá pra dormir.', ''];
   const MUSIC_REACT = ['Que bonito…', 'Toca mais uma!', 'Parece passarinho.', 'Me deu saudade.', 'Que sono bom…'];
-  L.startStory = function (S, p, f) {
-    const l = S.life, music = !!(G.Inv && G.Inv.flute(S)) && S.rng.next() < C.FLAUTA_STORY;
-    const lines = music ? [pick(S, MUSIC_OPEN), '', pick(S, MUSIC_END)] : storyLines(S, p);
+  const SERMON_REACT = ['Amém.', 'É verdade.', 'Eu sinto isso.', 'Que bonito…', 'Fala mais!', 'Eu acredito.'];
+  // sermon (Etapa 11): o escolhido da Palavra prega em vez de contar
+  L.startStory = function (S, p, f, sermon) {
+    const l = S.life, music = !sermon && !!(G.Inv && G.Inv.flute(S)) && S.rng.next() < C.FLAUTA_STORY;
+    const lines = sermon ? G.Deus.sermonLines(S) : music ? [pick(S, MUSIC_OPEN), '', pick(S, MUSIC_END)] : storyLines(S, p);
     const dur = C.STORY_MIN[0] + Math.round(S.rng.next() * (C.STORY_MIN[1] - C.STORY_MIN[0]));
-    l.story = { id: l.nextId++, teller: p.id, fire: f.id, on: false, t0: S.t, dur, lines, li: 0, listeners: [], heard: {}, music };
+    l.story = { id: l.nextId++, teller: p.id, fire: f.id, on: false, t0: S.t, dur, lines, li: 0, listeners: [], heard: {}, music, sermon: !!sermon };
     l.storyDay = S.ck.day;
     return l.story;
   };
@@ -451,7 +457,7 @@
     while (st.li < st.lines.length && t >= at[st.li]) { const ln = st.lines[st.li++]; if (ln) Sim().say(S, p, ln, true, 'historia'); }
     if (st.li >= 1 && S.rng.next() < 0.03) {
       const ls = st.listeners.map((id) => person(S, id)).filter((q) => q && q.alive && q.act && q.act.type === 'ouvir' && q.act.stage === 'listen');
-      if (ls.length) Sim().say(S, pick(S, ls), pick(S, st.music ? MUSIC_REACT : REACT), false);
+      if (ls.length) Sim().say(S, pick(S, ls), pick(S, st.sermon ? SERMON_REACT : st.music ? MUSIC_REACT : REACT), false);
     }
   };
   L.endStory = function (S, p, full) {
@@ -462,6 +468,14 @@
     const Sm = Sim();
     const heard = Object.keys(st.heard).filter((id) => st.heard[id] >= 15).map((id) => person(S, +id)).filter((q) => q && q.alive);
     if (!heard.length) return;
+    if (st.sermon) {
+      // a pregação (Etapa 11): a fé de quem ouve sobe, o cético vê um sinal, e Deus ganha Poder
+      Sm.addMem(S, p, 'contouHistoria');
+      for (const q of heard) q.rel[p.id] = (q.rel[p.id] || 0) + 1;
+      G.Deus.onSermon(S, p, heard);
+      S.events.push({ k: 'story', on: false });
+      return;
+    }
     if (st.music) {
       // a flauta não ensina a descoberta, mas faz bem a quem ouve e aproxima de quem toca
       Sm.addMem(S, p, 'tocouFlauta');
@@ -475,7 +489,8 @@
     for (const q of heard) { Sm.addMem(S, q, 'ouviuHistoria'); q.rel[p.id] = (q.rel[p.id] || 0) + 1; }
     // histórias espalham o saber: a próxima descoberta anda um pouco
     const open = G.Tech.open(S);
-    if (open && heard.length) G.Tech.addPractice(S, open, C.STORY_PRACTICE * heard.length * L.fireDef(S, st.fire).story, null);
+    const esc = G.Deus && G.Deus.saber(S, 'escrita') ? C.ESCRITA_STORY : 1;   // com a escrita (Etapa 11), a história ensina o dobro
+    if (open && heard.length) G.Tech.addPractice(S, open, C.STORY_PRACTICE * heard.length * L.fireDef(S, st.fire).story * esc, null);
     S.stats.stories++;
     if (S.stats.stories === 1) Sm.chron(S, 'Pela primeira vez, ' + p.name + ' contou uma história ao pé do fogo' + (heard.length ? ', e ' + Sm.listNames(heard) + (heard.length > 1 ? ' ouviram.' : ' ouviu.') : '.'));
     S.events.push({ k: 'story', on: false });

@@ -183,6 +183,35 @@
     bote(t, o, v) { noise(t, 0.5, 'lowpass', 2400, 1, 0.005, 0.5 * v, o, 300); tone('sine', 120, t, 0.002, 0.15, 0.4 * v, o, 50); noise(t + 0.05, 0.03, 'highpass', 3000, 1, 0.001, 0.3 * v, o); return 0.6; },
     revoada(t, o, v) { for (let i = 0; i < 8; i++) noise(t + i * 0.045, 0.03, 'bandpass', 1800 + Math.random() * 900, 2, 0.002, 0.12 * v, o); tone('sine', 1500, t + 0.05, 0.01, 0.1, 0.03 * v, o, 1900); return 0.45; },
     // Etapa 10: a enxada na terra, a colheita, os bichos do curral, os gafanhotos e o sininho do mascate
+    // Etapa 11: Deus sobe de nível, o dom, o escolhido, a conversão, a estátua consagrada, a espécie nova, o saber e a Bênção
+    nivel(t, o, v) {
+      [67, 71, 74, 79, 83, 86].forEach((m, i) => bell(hz(m), t + i * 0.11, 0.13 * v, o, 2.2));
+      pad([hz(55), hz(62), hz(67), hz(71)], t + 0.5, 2.8, 0.07 * v, o, 2600); return 3.4;
+    },
+    dom(t, o, v) { [79, 83, 86, 91].forEach((m, i) => bell(hz(m), t + i * 0.07, 0.1 * v, o, 1.6)); return 1.9; },
+    ungir(t, o, v) {
+      [72, 79, 84, 88].forEach((m, i) => bell(hz(m), t + i * 0.09, 0.12 * v, o, 2.4));
+      noise(t + 0.2, 1.4, 'highpass', 6500, 1, 0.3, 0.06 * v, o); return 2.6;
+    },
+    converte(t, o, v) { [69, 72, 76, 81].forEach((m, i) => bell(hz(m), t + i * 0.13, 0.11 * v, o, 2)); pad([hz(57), hz(64), hz(69)], t + 0.4, 2, 0.05 * v, o, 2200); return 2.6; },
+    consagrar(t, o, v) {
+      bell(hz(48), t, 0.22 * v, o, 3.2);
+      [67, 72, 76, 79, 84].forEach((m, i) => bell(hz(m), t + 0.5 + i * 0.1, 0.1 * v, o, 2));
+      pad([hz(48), hz(55), hz(64)], t + 0.3, 2.6, 0.07 * v, o, 1800); return 3.4;
+    },
+    criar(t, o, v) {
+      tone('sine', 220, t, 0.3, 1.2, 0.1 * v, o, 1320);
+      [72, 76, 79, 84, 88, 91].forEach((m, i) => bell(hz(m), t + 0.6 + i * 0.08, 0.09 * v, o, 1.8));
+      noise(t + 0.4, 1.6, 'highpass', 5000, 1, 0.4, 0.05 * v, o); return 2.8;
+    },
+    saber(t, o, v) {
+      pad([hz(50), hz(57), hz(62), hz(69)], t, 3, 0.08 * v, o, 2400);
+      [74, 78, 81, 86].forEach((m, i) => bell(hz(m), t + 0.8 + i * 0.22, 0.09 * v, o, 2.2)); return 3.4;
+    },
+    bencao(t, o, v) {
+      pad([hz(60), hz(67), hz(72)], t, 1.8, 0.07 * v, o, 2000);
+      for (let i = 0; i < 6; i++) tone('sine', hz(88 + (i % 3) * 3), t + 0.2 + i * 0.12, 0.003, 0.25, 0.04 * v, o); return 2;
+    },
     enxada(t, o, v) { noise(t, 0.09, 'lowpass', 1100, 1, 0.003, 0.3 * v, o, 350); noise(t + 0.02, 0.05, 'bandpass', 2400, 2, 0.002, 0.08 * v, o); return 0.12; },
     colheita(t, o, v) { for (let i = 0; i < 5; i++) noise(t + i * 0.07, 0.07, 'bandpass', 1800 + Math.random() * 800, 1.5, 0.01, 0.1 * v, o); [72, 76, 79].forEach((m, i) => pluck(hz(m), t + 0.35 + i * 0.09, 0.5, 0.12 * v, o)); return 0.9; },
     galo(t, o, v) {
@@ -283,7 +312,7 @@
     const p = place(x, y);
     if (p.g < 0.04) return;
     lastPlay[name] = now;
-    const wet = { nascimento: 0.5, morte: 0.6, descoberta: 0.4, era: 0.5, cura: 0.5, revelacao: 0.6, oracao: 0.5, atendida: 0.4, obrigado: 0.4, uivo: 0.5, lua: 0.5, canto: 0.4, arcoiris: 0.5, estrela: 0.4, esturro: 0.45 }[name] || 0.1;
+    const wet = { nivel: 0.6, dom: 0.5, ungir: 0.5, converte: 0.5, consagrar: 0.6, criar: 0.6, saber: 0.6, bencao: 0.4, nascimento: 0.5, morte: 0.6, descoberta: 0.4, era: 0.5, cura: 0.5, revelacao: 0.6, oracao: 0.5, atendida: 0.4, obrigado: 0.4, uivo: 0.5, lua: 0.5, canto: 0.4, arcoiris: 0.5, estrela: 0.4, esturro: 0.45 }[name] || 0.1;
     SFX[name](now + 0.02 + (delay || 0), out(bus.sfx, p.pan, wet), p.g * (vol === undefined ? 1 : vol));
   };
   A.ui = function (name) { if (name === 'click') A.sfx('clique'); };
@@ -322,7 +351,16 @@
       case 'beast': A.sfx('grunhido', e.x, e.y); break;
       case 'birdsUp': A.sfx('revoada', e.x, e.y); break;
       case 'bolt': A.sfx('trovao'); break;
-      case 'miracle': A.sfx(e.kind === 'revelacao' ? 'revelacao' : e.kind === 'cura' ? 'cura' : e.kind === 'chuva' ? 'chuva' : 'calor', e.x + 0.5, e.y + 0.5, 1.2); break;
+      case 'miracle': {
+        const k = { revelacao: 'revelacao', cura: 'cura', chuva: 'chuva', bencao: 'bencao', consagrar: 'consagrar', criar: 'criar', saber: 'saber' }[e.kind] || 'calor';
+        A.sfx(k, k === 'criar' || k === 'saber' ? undefined : e.x + 0.5, k === 'criar' || k === 'saber' ? undefined : e.y + 0.5, 1.2);
+        break;
+      }
+      // Etapa 11
+      case 'godLevel': A.sfx('nivel'); break;
+      case 'dom': A.sfx('dom'); break;
+      case 'ungir': A.sfx('ungir', e.x, e.y); break;
+      case 'converte': A.sfx('converte', e.x, e.y); break;
       case 'heart': A.sfx('coracao', e.x + 0.5, e.y + 0.5); break;
       case 'birth': A.sfx('nascimento'); break;
       case 'disc': A.sfx('descoberta'); break;

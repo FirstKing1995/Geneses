@@ -103,7 +103,7 @@
     const n = S.narr;
     if (!n) return;
     // seca: os arbustos murcham
-    if (n.active.seca) for (const o of S.world.objs) if (o.k === 'bush' && o.fruit > 0 && S.rng.chance(C.SECA_WILT)) o.fruit--;
+    if (n.active.seca) for (const o of S.world.objs) if (o.k === 'bush' && !o.holy && o.fruit > 0 && S.rng.chance(C.SECA_WILT)) o.fruit--;
     if (S.safe) return;   // com o jogo fechado o Narrador descansa
     decide(S);
   };
@@ -318,7 +318,7 @@
       }
       case 'fartura': {
         const c = camp(S);
-        for (const b of S.world.objs) if (b.k === 'bush' && Math.hypot(b.x - c.x, b.y - c.y) <= C.FARTURA_R) b.fruit = C.BUSH_MAX;
+        for (const b of S.world.objs) if (b.k === 'bush' && Math.hypot(b.x - c.x, b.y - c.y) <= C.FARTURA_R) b.fruit = Math.max(b.fruit, C.BUSH_MAX);
         n.active.fartura = { t0: S.t, until: S.t + C.FARTURA_DAYS * D() };
         Sm.chron(S, 'Os arbustos carregaram como nunca: é tempo de fartura.');
         if (G.Campo) G.Campo.onFartura(S);   // Etapa 10: a roça que está crescendo também rende mais
@@ -434,17 +434,18 @@
     S.events.push({ k: 'narr', ev: 'seca', on: false });
     return 'A seca acabou.';
   };
-  N.onRaio = function (S, x, y) {
+  // killR: até onde o raio abate (o dom do Trovão, na Etapa 11, alcança mais longe)
+  N.onRaio = function (S, x, y, killR) {
     const n = S.narr;
     if (!n) return null;
-    const cx = x + 0.5, cy = y + 0.5;
+    const cx = x + 0.5, cy = y + 0.5, kr = killR || 1.6;
     // a onça (Etapa 9): o raio abate ou espanta até a noite seguinte
     const onca = n.ents.find((e) => e.k === 'onca' && !e.gone && !e.hidden && Math.hypot(e.x - cx, e.y - cy) < 6);
     if (onca) {
       G.God.answerKind(S, ['onca']);
       G.God.align(S, 2);
       for (const p of alive(S)) if (Math.hypot(p.x - cx, p.y - cy) < 10) { G.God.faith(S, p, 3); Sim().addMem(S, p, 'viuMilagre'); }
-      if (Math.hypot(onca.x - cx, onca.y - cy) < 1.6) {
+      if (Math.hypot(onca.x - cx, onca.y - cy) < kr) {
         onca.gone = true;
         const a = n.active.onca;
         if (a) a.killedBy = 'raio';
@@ -457,7 +458,7 @@
     }
     const wolves = n.ents.filter((e) => e.k === 'lobo' && !e.gone);
     if (!wolves.length) return null;
-    let hit = null, bd = 1.6;
+    let hit = null, bd = kr;
     for (const e of wolves) { const d = Math.hypot(e.x - cx, e.y - cy); if (d < bd) { bd = d; hit = e; } }
     if (!hit && !wolves.some((e) => Math.hypot(e.x - cx, e.y - cy) < 6)) return null;
     const a = n.active.lobos;
@@ -533,16 +534,22 @@
   };
 
   // ---------- lobos ----------
+  // Sentinela (Etapa 11): o fogo aceso espanta mais longe
+  const fireR = (S) => C.LOBO_FIRE_R + (G.Deus && G.Deus.dom(S, 'sentinela') ? C.DOM.sentinelaR : 0);
+  N.fireR = fireR;
   function repelAt(S, x, y) {
-    for (const b of S.buildings) if (b.type === 'fogueira' && b.built && b.fuel > 0 && Math.hypot(b.x + 0.5 - x, b.y + 0.5 - y) < C.LOBO_FIRE_R) return true;
+    const R = fireR(S);
+    for (const b of S.buildings) if (b.type === 'fogueira' && b.built && b.fuel > 0 && Math.hypot(b.x + 0.5 - x, b.y + 0.5 - y) < R) return true;
     return G.God.heatAt(S, x, y) > 0;
   }
   N.safeXY = repelAt;
   // para onde correr: um tile bem dentro da luz do fogo ou do Calor de Deus (na beirada o lobo ainda alcança)
   N.safeTile = function (S, i) {
     const w = S.world, x = i % w.W + 0.5, y = ((i / w.W) | 0) + 0.5;
-    for (const b of S.buildings) if (b.type === 'fogueira' && b.built && b.fuel > 0 && Math.hypot(b.x + 0.5 - x, b.y + 0.5 - y) < C.LOBO_FIRE_R - 0.8) return true;
+    const R = fireR(S);
+    for (const b of S.buildings) if (b.type === 'fogueira' && b.built && b.fuel > 0 && Math.hypot(b.x + 0.5 - x, b.y + 0.5 - y) < R - 0.8) return true;
     if (S.god) for (const a of S.god.auras) if (Math.hypot(a.x + 0.5 - x, a.y + 0.5 - y) < a.r - 0.8) return true;
+    if (G.Deus && S.god && S.god.pending) for (const L of G.Deus.lights(S)) if (Math.hypot(L.x - x, L.y - y) < L.r - 0.8) return true;   // a Luz e a estátua do fogo
     return false;
   };
   // a salvo: na barraca, no colo, perto do fogo aceso ou dentro do Calor de Deus
@@ -639,7 +646,7 @@
     const w = S.world, c = camp(S);
     for (let k = 0; k < 6; k++) {
       e.ring += 0.6 + S.rng.next() * 0.9;
-      const R = C.LOBO_FIRE_R + 2.5 + S.rng.next() * 2;
+      const R = fireR(S) + 2.5 + S.rng.next() * 2;
       const x = Math.round(c.x + Math.cos(e.ring) * R), y = Math.round(c.y + Math.sin(e.ring) * R);
       if (x < 1 || y < 1 || x >= w.W - 1 || y >= w.H - 1) continue;
       const goal = y * w.W + x;
@@ -1041,7 +1048,7 @@
         made.push({ p, role: pd.role });
         e.gone = true;
       }
-      G.God.init(S); F.init(S);
+      G.God.init(S); if (G.Deus) G.Deus.init(S); F.init(S);
       const mom = made.find((m) => m.role === 'mae'), dad = made.find((m) => m.role === 'pai'), kid = made.find((m) => m.role === 'filho');
       if (mom && dad) F.link(S, mom.p, dad.p, 70);
       if (kid) { kid.p.mother = mom ? mom.p.id : 0; kid.p.father = dad ? dad.p.id : 0; }

@@ -64,13 +64,14 @@
     return out;
   }
   Save.serialize = function (S) {
-    const w = S.world, objs = [], extra = [];
+    const w = S.world, objs = [], extra = [], holy = [];
     for (let i = 0; i < w.objs.length; i++) {
       const o = w.objs[i];
       if (i < w.genCount) {
         const c = CODE[o.k] !== undefined ? CODE[o.k] : 0;
         objs.push(c, c === 2 ? (o.regrow || 0) : c === 3 ? o.ch : c === 4 ? o.fruit : 0, c === 4 ? Math.round(o.grow * 100) : 0);
       } else if (o.k === 'grave') extra.push({ x: o.x, y: o.y, name: o.name });
+      else if (o.k === 'bush' && o.holy) holy.push([o.x, o.y, o.v || 0, o.fruit, Math.round(o.grow * 100)]);   // as árvores de Deus (Etapa 11)
     }
     const people = S.people.map((p) => {
       const q = {};
@@ -83,7 +84,7 @@
       v: 1, game: 'genesis', seed: S.seed, t: S.t, rng: S.rng.s, camp: S.camp, siteLabel: S.siteLabel,
       stock: S.stock, vontades: S.vontades, nextPid: S.nextPid, nextBid: S.nextBid,
       chron: S.chron, goals: S.goals, stats: S.stats, over: S.over, arrived: S.arrived,
-      people, buildings: S.buildings, objs, graves: extra, god: S.god, seen: packSeen(S.seen), narr: packNarr(S.narr),
+      people, buildings: S.buildings, objs, graves: extra, holy, god: S.god, seen: packSeen(S.seen), narr: packNarr(S.narr),
       tech: S.tech || null, fauna: packFauna(S.fauna), opts: S.opts || null, life: packLife(S.life),
       obras: G.Obras ? G.Obras.pack(S) : null, campo: G.Campo ? G.Campo.pack(S) : null,
       goalsPhase: S.goalsPhase || 1, era: S.era || '', famInit: !!S.famInit, savedAt: G.Net ? G.Net.now() : Date.now(),
@@ -105,6 +106,7 @@
       G.W.refreshBlock(w, o.y * w.W + o.x);
     }
     for (const g of d.graves || []) G.W.addObj(w, 'grave', g.x, g.y, { name: g.name });
+    for (const h of d.holy || []) { const o = G.W.addObj(w, 'bush', h[0], h[1], { v: h[2], fruit: h[3], grow: h[4] / 100, holy: 1 }); G.W.refreshBlock(w, h[1] * w.W + h[0]); }
     for (const b of d.buildings) {
       for (let dy = 0; dy < b.h; dy++) for (let dx = 0; dx < b.w; dx++) {
         const i = (b.y + dy) * w.W + b.x + dx;

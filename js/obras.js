@@ -352,6 +352,7 @@
   O.openWhy = function (S, type) {
     const d = C.BUILD[type];
     if (d && d.open === 'inverno' && !(S.stats.winters >= 1)) return 'abre depois do primeiro inverno';
+    if (type === 'estatua') return G.Deus ? G.Deus.buildWhy(S, type) : 'chega com o nível 3 de Deus';   // Etapa 11
     return '';
   };
 })(globalThis.G = globalThis.G || {});

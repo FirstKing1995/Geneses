@@ -44,6 +44,7 @@
       case 'mataAgua': return trees(w, x, y, 3) >= 2 && waterNear(w, x, y, 3);
       case 'campo': return (t === T.GRASS || t === T.DRY || t === T.SAND) && trees(w, x, y, 2) === 0 && !waterNear(w, x, y, 1);
       case 'lago': return W.waterAdj(w, i) >= 0 && W.waterCount8(w, i) >= 3;
+      case 'deus': return w.bgrid[i] < 0 && !G.Sim.isCamp(S, i) && trees(w, x, y, 1) <= 3;   // o bicho criado por Deus (Etapa 11): perto da aldeia
     }
     return false;
   }
@@ -80,7 +81,7 @@
   // um lugar para o bando: o hábitat da espécie, longe o bastante do acampamento e dos outros bandos
   function herdSpot(S, sp) {
     const w = S.world, cx = S.camp.x + 1, cy = S.camp.y + 1;
-    const dist = C.BICHOS[sp].hab === 'lago' ? [C.JACARE_DIST, C.FAUNA_DIST[1]] : C.FAUNA_DIST;
+    const hab = C.BICHOS[sp].hab, dist = hab === 'lago' ? [C.JACARE_DIST, C.FAUNA_DIST[1]] : hab === 'deus' ? [8, 18] : C.FAUNA_DIST;
     const taken = S.fauna.herds;
     for (let k = 0; k < 160; k++) {
       const a = S.rng.next() * Math.PI * 2, d = dist[0] + S.rng.next() * (dist[1] - dist[0]);
@@ -114,6 +115,13 @@
     }
     return null;
   }
+  // Etapa 11: bandos novos de uma espécie (a que Deus cria); devolve quantos acharam lugar
+  F.addHerds = function (S, sp, n) {
+    if (!S.fauna || !C.BICHOS[sp]) return 0;
+    let k = 0;
+    for (let i = 0; i < n; i++) if (newHerd(S, sp)) k++;
+    return k;
+  };
   F.alive = (S) => (S.fauna ? S.fauna.ents.filter((e) => e.state !== 'morta' && !e.gone) : []);
   F.herdOf = (S, e) => S.fauna.herds.find((h) => h.id === e.h) || null;
   F.get = (S, id) => (S.fauna ? S.fauna.ents.find((e) => e.id === id) || null : null);

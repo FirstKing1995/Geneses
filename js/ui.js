@@ -84,6 +84,13 @@
     c_cinco: 'Toque numa roça e escolha o que plantar. O algodão vem depois da roça; a mandioca aguenta o inverno.',
     c_curral: 'Construa um curral (Y): o mascate passa trocando bichos. Com macho e fêmea, nasce cria.',
     c_cerca: 'Construir → Cerca (X) e feche a volta toda. Árvore, pedra e água também servem de parede.',
+    // Etapa 11: Deus
+    g_nivel2: 'Atenda as orações: a glória (o Poder que o povo te dá) e os fiéis (fé 70 ou mais) fazem Deus subir. Veja em Deus.',
+    g_converte: 'O cético se converte vendo sinais: milagres de perto, a oração dele atendida, curas e a pregação.',
+    g_nivel3: 'O nível 3 pede mais fiéis: cuide da fé de quem tem 7 anos ou mais.',
+    g_escolhido: 'Quem chega à fé inteira (100), com 16 anos ou mais, pode receber um poder: Deus → Escolhidos.',
+    g_estatua: 'Construir → Estátua. Pronta, toque nela e escolha o milagre dela.',
+    g_ato: 'No nível 4, crie uma espécie; no nível 5, ensine um saber. Deus → Grandes atos.',
   };
   // estoque: os cinco de sempre e os da Etapa 5, que aparecem quando existem
   const RES = [['madeira', 'madeira'], ['pedra', 'pedra'], ['argila', 'argila'], ['tabuas', 'tabuas'], ['fibra', 'fibra'], ['agua', 'agua'], ['frutas', 'frutas'], ['peixe', 'peixe'], ['carne', 'carne'],
@@ -125,12 +132,12 @@
     });
     // construir (as das descobertas aparecem com elas; o armazém, depois do primeiro inverno) e a ferramenta de caminho
     const builds = [['fogueira', 'fogo'], ['barraca', 'barraca'], ['armazem', 'armazem'], ['moquem', 'moquem'], ['jirau', 'jirau'], ['forno', 'forno'],
-      ['marcenaria', 'marcenaria'], ['tecelagem', 'tecelagem'], ['roca', 'roca'], ['curral', 'curral']];
+      ['marcenaria', 'marcenaria'], ['tecelagem', 'tecelagem'], ['roca', 'roca'], ['curral', 'curral'], ['estatua', 'estatua']];
     const SHORT = { barraca: 'Barraca', forno: 'Forno' };   // nome curto no botão (o painel fica em duas fileiras)
     $('#builds').innerHTML = builds.map(([t, icn]) => {
       const d = C.BUILD[t];
       return `<button class="btn bbtn" data-build="${t}" title="${esc(d.name + ': ' + d.desc)}">
-        <img class="ico" src="${ic(icn)}" alt=""><span>${SHORT[t] || d.name}<kbd>${d.key}</kbd></span>
+        <img class="ico" src="${ic(icn)}" alt=""><span>${SHORT[t] || d.name}${d.key ? `<kbd>${d.key}</kbd>` : ''}</span>
         <span class="cost">${Object.keys(d.cost).length ? Object.keys(d.cost).map((k) => `<span data-c="${k}"><img src="${ic(k)}" alt="${RES_NAME[k]}"> ${d.cost[k]}</span>`).join('') : '<span>só trabalho</span>'}</span>
       </button>`;
     }).join('') + `<button class="btn bbtn" data-tool="caminho" title="Arraste pelo chão para marcar um caminho. Terra: só trabalho, anda-se 30% mais rápido. Pedra: 1 pedra por passo, 45% mais rápido.">
@@ -144,10 +151,10 @@
       UI.hooks.place(b.dataset.build);
     });
     // Deus: milagres e orações
-    const keys = { calor: 'Q', raio: 'R', chuva: 'U', cura: 'E', revelacao: 'V' };
+    const keys = { calor: 'Q', raio: 'R', chuva: 'U', cura: 'E', revelacao: 'V', bencao: 'Z' };
     $('#miracles').innerHTML = Object.keys(G.God.MIRACLES).map((k) => {
       const m = G.God.MIRACLES[k];
-      return `<button class="btn mbtn" data-mir="${k}" title="${esc(m.desc)}"><img class="ico" src="${ic(m.icon)}" alt=""><span>${m.name} <kbd>${keys[k]}</kbd></span><span class="cost">${m.cost} de Poder</span></button>`;
+      return `<button class="btn mbtn" data-mir="${k}" title="${esc(m.desc)}"><img class="ico" src="${ic(m.icon)}" alt=""><span>${m.name} <kbd>${keys[k] || ''}</kbd></span><span class="cost">${m.cost} de Poder</span></button>`;
     }).join('');
     $('#miracles').addEventListener('click', (e) => {
       const b = e.target.closest('[data-mir]'); if (!b) return;
@@ -163,6 +170,17 @@
       UI.select(shown.id, 0, true);
       UI.hooks.cast(G.God.PRAYER_HELP[p.prayer.kind]);
     });
+    // Etapa 11: a janela de Deus (níveis e dons, escolhidos, grandes atos)
+    $('#btn-deus img').src = ic('deus');
+    $('#btn-deus').addEventListener('click', () => { if (S && G.Deus && G.Deus.pending(S) && UI.hooks.godPending) UI.hooks.godPending(); else UI.deus(); });
+    $('#deus-close').addEventListener('click', () => { $('#modal-deus').hidden = true; });
+    $('#modal-deus').addEventListener('click', (e) => {
+      if (e.target === $('#modal-deus')) { $('#modal-deus').hidden = true; return; }
+      const t = e.target.closest('[data-gtab]'); if (t) { UI.deus(t.dataset.gtab); return; }
+      const b = e.target.closest('[data-gact]'); if (!b || !S || !G.Deus) return;
+      godAct(b);
+    });
+    $('#modal-deus').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.id === 'deus-rename') { e.preventDefault(); godAct({ dataset: { gact: 'rename' } }); } });
     // árvore da família e descobertas
     $('#btn-tree img').src = ic('arvore');
     $('#btn-tree').addEventListener('click', () => UI.tree());
@@ -188,6 +206,7 @@
         const kid = S.people.find((q) => q.id === UI.sel.person);
         if (kid) UI.birth(kid, null, true);
       }
+      if (b.dataset.act === 'ungir') UI.deus('escolhidos');   // Etapa 11
     });
     // a obra escolhida no mapa tem painel próprio (a evolução, remover, o que plantar)
     $('#obra-close').addEventListener('click', () => UI.select(0, 0));
@@ -210,6 +229,15 @@
         return;
       }
       if (b.dataset.act === 'back') UI.select(0, 0);
+      if (b.dataset.act === 'consagrar' && G.Deus) {
+        // Etapa 11: o milagre próprio da estátua
+        const why = G.Deus.consecrateWhy(S, bd, b.dataset.k);
+        if (why) { UI.toast('Não dá para consagrar: ' + why + '.', 'warn'); return; }
+        G.Deus.consecrate(S, bd, b.dataset.k);
+        lastInsp = '';
+        UI.update(0, true);
+        return;
+      }
       if (b.dataset.act === 'crop' && bd.type === 'roca' && G.Campo) {
         // Etapa 10: o que plantar nesta roça (vazio: o povo escolhe pela estação e pelo que falta)
         const f = G.Campo.farmOf(bd), k = b.dataset.k || null;
@@ -462,12 +490,12 @@
   };
   function paintPeople() {
     const list = $('#people');
-    const key = ordered().map((p) => p.id + (p.alive ? 'a' : 'd')).join(',') + '|' + UI.sel.person;
+    const key = ordered().map((p) => p.id + (p.alive ? 'a' : 'd') + (p.escolhido ? p.escolhido.power : '')).join(',') + '|' + UI.sel.person;
     if (key !== cardsKey) {
       cardsKey = key;
       list.innerHTML = ordered().map((p) => `
         <button class="pcard${p.id === UI.sel.person ? ' sel' : ''}${p.alive ? '' : ' dead'}" data-pid="${p.id}">
-          <div class="row1"><span class="nm">${esc(p.name)}${p.alive ? '' : ' †'}</span><span class="small muted age"></span></div>
+          <div class="row1"><span class="nm">${esc(p.name)}${p.alive ? '' : ' †'}${p.alive && p.escolhido && G.Deus ? ` <span class="ttl">${esc(G.Deus.title(p))}</span>` : ''}</span><span class="small muted age"></span></div>
           <div class="doing"></div>
           ${p.alive ? `<div class="minibars">${NEEDS.slice(0, 4).map(([k, , icn]) => `<div class="mb" title="${k}"><img class="ico" src="${ic(icn)}" alt=""><div class="bar"><i data-n="${k}"></i></div></div>`).join('')}</div>` : ''}
         </button>`).join('');
@@ -481,17 +509,31 @@
     const n = S.people.filter((p) => p.alive).length;
     $('#povo-title').textContent = 'Seu povo · ' + n;
   }
+  function setText(el, t) { if (el && el.textContent !== t) el.textContent = t; }
+  const fmtN = (n) => Math.floor(n).toLocaleString('pt-BR');
   function paintGod() {
     const g = S.god; if (!g) return;
     $('#poder-num').textContent = Math.floor(g.poder);
     $('#poder-bar').style.width = Math.min(100, g.poder / C.POWER_BAR * 100) + '%';
     $('#align-mark').style.left = ((g.align + 100) / 2) + '%';
+    // Etapa 11: o nome, o nível e o que falta para o próximo
+    const Dz = G.Deus;
+    if (Dz && g.pending) {
+      const lv = Dz.level(S), def = Dz.levelDef(lv), nx = Dz.next(S);
+      setText($('#deus-title'), g.name || 'Deus');
+      setText($('#deus-sub'), (g.name ? g.epithet + ' · ' : '') + def.name + ', nível ' + lv);
+      setText($('#deus-next'), nx ? 'Nível ' + (lv + 1) + ': glória ' + fmtN(g.glory) + '/' + fmtN(nx.glory) + ' · fiéis ' + Dz.fieis(S) + '/' + nx.fieis : 'Níveis, dons e grandes atos');
+      const bd2 = $('#badge-dom'), pend = !!Dz.pending(S);
+      if (bd2.hidden === pend) bd2.hidden = !pend;
+      $('#btn-deus').classList.toggle('pend', pend);
+    }
     document.querySelectorAll('.mbtn').forEach((b) => {
-      const m = G.God.MIRACLES[b.dataset.mir], open = G.God.unlocked(S, b.dataset.mir);
-      b.classList.toggle('poor', g.poder < m.cost);
+      const k = b.dataset.mir, m = G.God.MIRACLES[k], open = G.God.unlocked(S, k), cost = G.God.cost(S, k);
+      b.classList.toggle('poor', g.poder < cost);
       b.classList.toggle('locked', !open);
-      b.title = open ? m.desc : G.God.lockedText(b.dataset.mir) + ' ' + m.desc;
-      b.classList.toggle('on', UI.hooks.casting() === b.dataset.mir);
+      b.title = open ? m.desc : G.God.lockedText(k) + ' ' + m.desc;
+      b.classList.toggle('on', UI.hooks.casting() === k);
+      setText(b.querySelector('.cost'), cost + ' de Poder');
     });
     const pr = S.people.filter((p) => p.alive && p.prayer);
     const html = pr.map((p) => {
@@ -536,6 +578,14 @@
       if (p.alive && p.labor) state = p.labor.hard && !p.labor.helped ? 'Parto difícil. A Cura salva mãe e bebê.' : 'Em trabalho de parto.';
       else if (p.alive && p.preg && p.preg.known) { const d = Math.max(1, Math.ceil((p.preg.due - S.t) / C.DAY_MIN)); state = 'Grávida · o bebê chega em ' + d + (d === 1 ? ' dia.' : ' dias.'); }
       const who = p.sex === 'F' ? 'Ela' : 'Ele';
+      // Etapa 11: o escolhido, o cético que junta sinais, quem chegou à fé inteira
+      let godLine = '';
+      const Dz = G.Deus;
+      if (p.alive && Dz && S.god && S.god.pending) {
+        if (p.escolhido) godLine = `<p class="small god-line"><b>${esc(Dz.title(p))}</b> de ${esc(Dz.call(S))}: ${esc(Dz.POWERS[p.escolhido.power].desc)}</p>`;
+        else if (Sim.has(p, 'Cético') && (p.sinais || 0) > 0) godLine = `<p class="small muted">Já viu ${Math.floor(p.sinais)} de ${C.CONVERTE_SINAIS} sinais de ${esc(Dz.call(S))}. Com os sinais e fé ${C.CONVERTE_FE}, se converte.</p>`;
+        else if (Dz.full100(S, p) && F.age(S, p) >= C.UNGIR_AGE && !p.carriedBy) godLine = Dz.level(S) >= 3 ? `<p class="small god-line">Fé inteira. <button class="btn btn-small" data-act="ungir">Dar um poder</button></p>` : `<p class="small god-line">Fé inteira. No nível 3 de Deus, pode receber um poder.</p>`;
+      }
       // Etapa 6: a última conversa e quem está brigado
       const talk = p.alive && p.talk && S.t - p.talk.t < 2 * C.DAY_MIN ? `<div class="talk"><span class="small muted">Última conversa${p.talk.kind === 'briga' ? ' (briga)' : p.talk.kind === 'consolo' ? ' (consolo)' : p.talk.kind === 'pazes' ? ' (pazes)' : ''}</span>${p.talk.lines.map(([n, t]) => `<p><b>${esc(n)}:</b> “${esc(t)}”</p>`).join('')}</div>` : '';
       const feud = p.alive && p.feud ? Object.keys(p.feud).filter((id) => p.feud[id] > S.t).map((id) => { const q = F.person(S, +id); return q && q.alive ? q.name : ''; }).filter(Boolean) : [];
@@ -544,6 +594,7 @@
         <h3><span>${esc(p.name)}</span><span class="small muted">${who}, ${p.alive ? UI.ageText(S, p) : Sim.ageOf(S, p) + ' anos'}</span></h3>
         <p class="small">${p.alive ? esc(AI.describe(S, p)) + ' · ' + feel(p.tempHere) : esc(AI.describe(S, p)) + '.'}</p>
         ${state ? `<p class="small preg">${esc(state)}</p>` : ''}
+        ${godLine}
         ${p.prayer ? `<p class="story">Reza: “${esc(p.prayer.text)}”</p>` : ''}
         ${talk}
         <div class="chips">${p.traits.map((t) => `<span class="chip" title="${esc(Sim.TRAIT_DESC[t])}">${esc(t)}</span>`).join('')}</div>
@@ -588,7 +639,7 @@
       </div>`;
     }
     const st = el.querySelector('#bstatus'); if (st) st.textContent = buildingStatus(b, d, job);
-    const ex = el.querySelector('#bextra'); if (ex) setHTML(ex, b.built ? campoHTML(b) : '');
+    const ex = el.querySelector('#bextra'); if (ex) setHTML(ex, b.built ? (b.type === 'estatua' ? estatuaHTML(b) : campoHTML(b)) : '');
   }
   function costText(cost) {
     const parts = Object.keys(cost || {}).map((k) => cost[k] + ' de ' + (MAT_WORD[k] || k));
@@ -606,6 +657,7 @@
         (short.length && job.progress <= 0 ? ' · falta ' + short.map((k) => MAT_WORD[k] || k).join(' e ') + ' no estoque' + (short.includes('tabuas') ? ' (a marcenaria faz)' : short.includes('fibra') ? ' (vem da casca das árvores cortadas)' : '') : '');
     }
     if (b.type === 'roca' && G.Campo) return rocaStatus(b);
+    if (b.type === 'estatua' && G.Deus) return estatuaStatus(b);
     if (b.type === 'curral' && G.Campo) return curralStatus(b, d);
     const f = d.fire;
     if (b.type === 'fogueira') return (b.fuel > 0 ? 'Acesa · lenha ' + b.fuel.toFixed(1) + '/' + C.FIRE_CAP : 'Apagada · o povo reacende quando esfriar') +
@@ -725,6 +777,204 @@
   function moodWord(m) { return m >= 75 ? 'radiante' : m >= 55 ? 'feliz' : m >= 40 ? 'em paz' : m >= 25 ? 'triste' : 'em desespero'; }
   function setHTML(el, html) { if (el._h !== html) { el._h = html; el.innerHTML = html; } }
 
+  // ---------- Etapa 11: Deus (a estátua, a janela de Deus e a escolha do nome e do dom) ----------
+  function estatuaStatus(b) {
+    const Dz = G.Deus, reach = Dz.reach(S, b);
+    const rz = S.people.filter((p) => p.alive && p.prayedDay === S.ck.day).length;
+    const tail = rz ? ' Rezaram aqui hoje de manhã: ' + rz + '.' : '';
+    if (!b.milagre) return 'Ainda sem milagre.' + tail;
+    if (b.milagre === 'chuva') {
+      const gap = Math.round(C.ESTATUA_CHUVA_D / reach) * C.DAY_MIN, d = Math.max(0, Math.ceil((gap - (S.t - (b.lastRain || 0))) / C.DAY_MIN));
+      return 'Chama a chuva a cada ' + dias(Math.round(C.ESTATUA_CHUVA_D / reach)) + (d > 1 ? '; a próxima, em ' + dias(d) + '.' : '; a próxima, logo.') + tail;
+    }
+    if (b.milagre === 'fogo') return 'Aquece até ' + Math.round(C.ESTATUA_R * reach) + ' passos, dia e noite; lobo e onça não chegam perto.' + tail;
+    if (b.milagre === 'cura') return 'Às 6h cura quem está fraco até ' + Math.round(C.ESTATUA_CURA_R * reach) + ' passos · curas: ' + (S.stats.statueHeals || 0) + '.' + tail;
+    return 'Vigia ' + Math.round(C.ESTATUA_TROVAO_R * reach) + ' passos em volta, de noite · raios: ' + (S.stats.statueBolts || 0) + '.' + tail;
+  }
+  function estatuaHTML(b) {
+    const Dz = G.Deus;
+    if (!Dz) return '';
+    if (b.milagre) {
+      const m = Dz.MILAGRES[b.milagre];
+      return `<div class="consagra done"><img class="ico" src="${ic(m.icon)}" alt=""><span><b>Milagre: ${esc(m.name.toLowerCase())}</b><span class="small">${esc(m.desc)}</span></span></div>`;
+    }
+    return `<p class="small">Escolha o milagre desta estátua (${C.CONSAGRAR_COST} de Poder). Ele acontece sozinho, para sempre, e cada estátua tem o seu.</p><div class="consagra">` +
+      Object.keys(Dz.MILAGRES).map((k) => {
+        const m = Dz.MILAGRES[k], why = Dz.consecrateWhy(S, b, k);
+        return `<button class="btn btn-small mil${why ? ' off' : ''}" data-act="consagrar" data-k="${k}" title="${esc(why ? 'Agora não: ' + why : m.desc)}"><img class="ico" src="${ic(m.icon)}" alt=""><span><b>${esc(m.name)}</b><span class="small">${esc(why ? why : m.desc)}</span></span></button>`;
+      }).join('') + '</div>';
+  }
+  // o que cada nível traz (na janela de Deus e na escolha do dom)
+  const LEVEL_GIFT = {
+    1: 'Os milagres do começo: Calor, Raio e Chuva (a Cura e a Revelação chegam com a vida do povo).',
+    2: 'O povo te dá um nome · a Bênção (Z) · um dom.',
+    3: 'Um escolhido com poder · uma estátua com milagre próprio · um dom.',
+    4: 'Dois escolhidos e duas estátuas · uma espécie nova · um dom.',
+    5: 'Três escolhidos e três estátuas · um saber de outra era · um dom.',
+  };
+  const LEVEL_LEAD = {
+    2: 'O povo reza para você todo dia. Agora você é o Guardião deles, e com o nível veio a Bênção (Z): por 2 dias, o trabalho num lugar rende metade a mais.',
+    3: 'Deus do Povo. Já dá para dar um poder a quem chegou à fé inteira e erguer uma estátua (Construir).',
+    4: 'Deus Antigo: gerações inteiras rezam para o mesmo céu. Já dá para criar uma espécie nova (Deus → Grandes atos).',
+    5: 'Deus Maior. Já dá para ensinar ao povo um saber de outra era (Deus → Grandes atos).',
+  };
+  let deusTab = 'nivel';
+  UI.deus = function (tab) {
+    if (!S || !S.god || !G.Deus || !S.god.pending) return;
+    if (tab) deusTab = tab;
+    const Dz = G.Deus, g = S.god;
+    document.querySelectorAll('#modal-deus [data-gtab]').forEach((b) => { b.classList.toggle('on', b.dataset.gtab === deusTab); b.setAttribute('aria-selected', b.dataset.gtab === deusTab ? 'true' : 'false'); });
+    $('#deus-mtitle').textContent = g.name ? g.name + ', ' + g.epithet : 'Deus';
+    $('#deus-poder').textContent = fmtN(g.poder) + ' de Poder · glória ' + fmtN(g.glory);
+    $('#deus-body').innerHTML = deusTab === 'escolhidos' ? escolhidosHTML(Dz, g) : deusTab === 'atos' ? atosHTML(Dz, g) : nivelHTML(Dz, g);
+    $('#modal-deus').hidden = false;
+  };
+  function nivelHTML(Dz, g) {
+    const lv = Dz.level(S), nx = Dz.next(S), fi = Dz.fieis(S);
+    const ladder = C.GOD_LEVELS.map((L, i) => {
+      const n = i + 1, st = n < lv ? 'done' : n === lv ? 'on' : '';
+      const req = n === 1 ? 'o começo' : 'glória ' + fmtN(L.glory) + ' · ' + L.fieis + ' fiéis';
+      return `<li class="${st}"><span class="lvn">${n}</span><div><b>${esc(L.name)}</b> <span class="small muted">${req}</span><span class="small">${esc(LEVEL_GIFT[n])}</span></div></li>`;
+    }).join('');
+    let prog = '';
+    if (nx) {
+      const gf = Math.min(1, g.glory / nx.glory), ff = Math.min(1, fi / Math.max(1, nx.fieis));
+      const lack = [];
+      if (g.glory < nx.glory) lack.push('glória: atenda as orações, e a fé do povo rende Poder todo dia');
+      if (fi < nx.fieis) lack.push('fiéis: gente de 7 anos ou mais com fé 70; o cético só conta depois de convertido');
+      prog = `<div class="lvprog"><span class="small">Para o nível ${lv + 1} (${esc(nx.name)}): glória ${fmtN(g.glory)} de ${fmtN(nx.glory)} · fiéis ${fi} de ${nx.fieis}</span>
+        <div class="bar poder"><i style="width:${Math.round(Math.min(gf, ff) * 100)}%"></i></div>${lack.length ? `<span class="small muted">Falta ${esc(lack.join('; falta '))}.</span>` : '<span class="small muted">Tudo pronto: o nível chega na próxima hora.</span>'}</div>`;
+    } else prog = '<p class="small">Você chegou ao nível mais alto.</p>';
+    const pend = Dz.pending(S);
+    const dons = g.dons.length ? g.dons.map((id) => { const d = Dz.DONS[id]; return `<li><img class="ico" src="${ic(d.icon)}" alt=""><div><b>${esc(d.name)}</b><span class="small">${esc(d.desc)}</span></div></li>`; }).join('') : '<li class="none small muted">Nenhum ainda: cada nível novo traz um dom para escolher.</li>';
+    const nm = g.name ? `<p class="small">O povo te chama de <b>${esc(g.name)}</b>, ${esc(g.epithet)}.${g.namedBy ? ' Quem começou foi ' + esc(g.namedBy) + '.' : ''} O título vem do que você mais fez e de como o povo te vê.</p>
+      <div class="name-row"><input id="deus-rename" maxlength="16" autocomplete="off" value="${esc(g.name)}" aria-label="Nome de Deus"><button type="button" class="btn btn-small" data-gact="rename">Trocar o nome</button></div>` :
+      '<p class="small muted">Ainda sem nome: no nível 2, o povo te dá um.</p>';
+    return `${pend ? `<button type="button" class="btn btn-gold" data-gact="pending">${pend.k === 'nome' ? 'O povo te deu um nome' : 'Escolha o dom do nível ' + pend.lv}</button>` : ''}
+      <p class="small muted">A glória é todo o Poder que o povo já te deu (gastar não tira). Fiel é quem tem 7 anos ou mais e fé 70 ou mais. Cada nível pede os dois.</p>
+      ${prog}<ol class="lvlist">${ladder}</ol><h3>Dons</h3><ul class="donlist">${dons}</ul><h3>Nome</h3>${nm}`;
+  }
+  function escolhidosHTML(Dz, g) {
+    const lv = Dz.level(S);
+    const powers = Object.keys(Dz.POWERS).map((k) => { const w = Dz.POWERS[k]; return `<li><img class="ico" src="${ic(w.icon)}" alt=""><div><b>${esc(w.name)}</b><span class="small">${esc(w.desc)}</span></div></li>`; }).join('');
+    const intro = `<p class="small muted">Quem chega à fé inteira (100), com ${C.UNGIR_AGE} anos ou mais, pode receber um poder de ${esc(Dz.call(S))} (${C.UNGIR_COST} de Poder). Um no nível 3, dois no 4, três no 5. Se a fé esfriar abaixo de ${C.GRACA_FE}, o poder vai embora.</p>`;
+    if (lv < 3) return intro + `<p class="small">Chega no nível 3 de Deus.</p><ul class="donlist">${powers}</ul>`;
+    const cur = Dz.escolhidos(S), max = Dz.slots(S);
+    const curHTML = cur.length ? cur.map((p) => { const w = Dz.POWERS[p.escolhido.power]; return `<li><img class="ico" src="${ic(w.icon)}" alt=""><div><b>${esc(p.name)}</b> <span class="small ttl">${esc(Dz.title(p))}</span><span class="small">${esc(w.name)} · fé ${Math.round(p.fe)}</span></div><button type="button" class="btn btn-small" data-gact="goto" data-pid="${p.id}">Ver</button></li>`; }).join('') : '<li class="none small muted">Ninguém ainda.</li>';
+    const cands = Dz.candidates(S);
+    let candHTML = '';
+    if (cands.length) {
+      candHTML = cands.map((p) => {
+        const why = Dz.anointWhy(S, p);
+        return `<li class="cand"><div><b>${esc(p.name)}</b> <span class="small muted">${Fam().age(S, p)} anos · fé ${Math.round(p.fe)}</span>${why ? `<span class="small warn">Agora não: ${esc(why)}.</span>` : ''}</div><div class="powbtns">` +
+          Object.keys(Dz.POWERS).map((k) => `<button type="button" class="btn btn-small" data-gact="ungir" data-pid="${p.id}" data-power="${k}"${why ? ' disabled' : ''}><img class="ico" src="${ic(Dz.POWERS[k].icon)}" alt="">${esc(Dz.POWERS[k].name)}</button>`).join('') + '</div></li>';
+      }).join('');
+    } else {
+      const near = S.people.filter((p) => p.alive && !p.carriedBy && !p.escolhido && Fam().age(S, p) >= C.UNGIR_AGE).sort((a, b) => b.fe - a.fe).slice(0, 3);
+      candHTML = `<li class="none small muted">Ninguém com fé inteira agora. A fé sobe com orações atendidas, milagres vistos, a reza na estátua e a pregação.${near.length ? ' Mais perto: ' + near.map((p) => esc(p.name) + ' (' + Math.round(p.fe) + ')').join(', ') + '.' : ''}</li>`;
+    }
+    return intro + `<h3>Escolhidos · ${cur.length} de ${max}</h3><ul class="donlist">${curHTML}</ul><h3>Com fé inteira</h3><ul class="donlist cands">${candHTML}</ul><h3>Os poderes</h3><ul class="donlist">${powers}</ul>`;
+  }
+  function atosHTML(Dz, g) {
+    const lv = Dz.level(S);
+    // estátuas
+    const sts = S.buildings.filter((b) => b.type === 'estatua'), max = C.ESTATUAS[lv] || 0;
+    const stList = sts.length ? sts.map((b, i) => `<li><img class="ico" src="${ic(b.milagre ? Dz.MILAGRES[b.milagre].icon : 'estatua')}" alt=""><div><b>Estátua ${i + 1}</b><span class="small">${!b.built ? 'Em obra.' : b.milagre ? 'Milagre: ' + esc(Dz.MILAGRES[b.milagre].name.toLowerCase()) + '. ' + esc(Dz.MILAGRES[b.milagre].desc) : 'Sem milagre ainda: toque nela no mapa e escolha.'}</span></div><button type="button" class="btn btn-small" data-gact="gobuild" data-bid="${b.id}">Ver</button></li>`).join('') : '';
+    const stTxt = lv < C.ESTATUA_LV ? 'Chega no nível ' + C.ESTATUA_LV + '.' : 'Estátuas: ' + sts.length + ' de ' + max + '. Marque em Construir → Estátua (' + costText(C.BUILD.estatua.cost) + '). Pronta, toque nela e escolha o milagre (' + C.CONSAGRAR_COST + ' de Poder).';
+    // espécies
+    const forms = Object.keys(Dz.FORMS).map((f) => {
+      const F2 = Dz.FORMS[f], made = Dz.species(S, f), why = Dz.speciesWhy(S, f);
+      if (made) return `<li class="made"><img class="ico" src="${ic(F2.icon)}" alt=""><div><b>${esc(made.name)}</b><span class="small">${esc(F2.desc)}</span><span class="small ok">Criad${f === 'arvore' ? 'a' : 'o'} por ${esc(Dz.call(S))}.</span></div></li>`;
+      return `<li><img class="ico" src="${ic(F2.icon)}" alt=""><div><b>${esc(F2.name)}</b><span class="small">${esc(F2.desc)}</span>
+        <div class="name-row"><input id="esp-${f}" maxlength="18" autocomplete="off" placeholder="${esc(F2.def)}" aria-label="Nome da espécie"${why ? ' disabled' : ''}><button type="button" class="btn btn-small" data-gact="especie" data-form="${f}"${why ? ' disabled' : ''}>Criar · ${C.ESPECIE_COST}</button></div>
+        ${why ? `<span class="small muted">${esc(why)}.</span>` : ''}</div></li>`;
+    }).join('');
+    // saberes
+    const sabs = Object.keys(Dz.SABERES).map((id) => {
+      const s = Dz.SABERES[id], why = Dz.saberWhy(S, id), has = Dz.saber(S, id);
+      return `<li${has ? ' class="made"' : ''}><img class="ico" src="${ic(s.icon)}" alt=""><div><b>${esc(s.name)}</b><span class="small">${esc(s.desc)}</span>${has ? '<span class="small ok">O povo já sabe.</span>' : why ? `<span class="small muted">${esc(why)}.</span>` : ''}</div>${has ? '' : `<button type="button" class="btn btn-small" data-gact="saber" data-id="${id}"${why ? ' disabled' : ''}>Ensinar · ${C.SABER_COST}</button>`}</li>`;
+    }).join('');
+    return `<h3>Estátua</h3><p class="small muted">${esc(stTxt)}</p>${stList ? `<ul class="donlist">${stList}</ul>` : ''}
+      <h3>Espécie nova <span class="small muted">· nível ${C.ESPECIE_LV}</span></h3><ul class="donlist">${forms}</ul>
+      <h3>Saber de outra era <span class="small muted">· nível ${C.SABER_LV}</span></h3><ul class="donlist">${sabs}</ul>`;
+  }
+  const Fam = () => G.Family;
+  function godAct(b) {
+    const Dz = G.Deus, a = b.dataset.gact;
+    if (a === 'pending') { $('#modal-deus').hidden = true; if (UI.hooks.godPending) UI.hooks.godPending(); return; }
+    if (a === 'rename') {
+      const v = ($('#deus-rename') || {}).value || '';
+      if (Dz.rename(S, v)) { UI.refreshChron(); UI.toast('Agora o povo te chama de ' + S.god.name + '.', 'good'); }
+      UI.deus(); UI.update(0, true);
+      return;
+    }
+    if (a === 'goto') { $('#modal-deus').hidden = true; UI.select(+b.dataset.pid, 0, true); return; }
+    if (a === 'gobuild') {
+      const bd = Sim.building(S, +b.dataset.bid);
+      $('#modal-deus').hidden = true;
+      if (bd) { UI.select(0, bd.id); UI.hooks.center((bd.x + 1) * C.TILE, (bd.y + 1) * C.TILE); }
+      return;
+    }
+    if (a === 'ungir') {
+      const p = S.people.find((q) => q.id === +b.dataset.pid);
+      const why = Dz.anointWhy(S, p);
+      if (why) { UI.toast('Agora não: ' + why + '.', 'warn'); return; }
+      if (Dz.anoint(S, p, b.dataset.power)) { UI.deus('escolhidos'); UI.update(0, true); }
+      return;
+    }
+    if (a === 'especie') {
+      const f = b.dataset.form, inp = $('#esp-' + f);
+      const why = Dz.speciesWhy(S, f);
+      if (why) { UI.toast('Agora não: ' + why + '.', 'warn'); return; }
+      if (Dz.createSpecies(S, f, inp ? inp.value : '')) { UI.deus('atos'); UI.update(0, true); }
+      return;
+    }
+    if (a === 'saber') {
+      const why = Dz.saberWhy(S, b.dataset.id);
+      if (why) { UI.toast('Agora não: ' + why + '.', 'warn'); return; }
+      if (Dz.grantSaber(S, b.dataset.id)) { UI.deus('atos'); UI.update(0, true); }
+    }
+  }
+  // o nome que o povo dá e o dom do nível novo: uma janela por vez (o jogo espera)
+  UI.godPending = function (onDone) {
+    const Dz = G.Deus, q = S && Dz && Dz.pending(S);
+    const m = $('#modal-dom'), ok = $('#dom-ok'), body = $('#dom-body');
+    if (!q) { m.hidden = true; if (onDone) onDone(); return false; }
+    const g = S.god;
+    const next = () => { m.hidden = true; UI.update(0, true); if (Dz.pending(S)) UI.godPending(onDone); else if (onDone) onDone(); };
+    $('#dom-ico').src = ic('deus');
+    if (q.k === 'nome') {
+      $('#dom-title').textContent = 'O povo te deu um nome';
+      $('#dom-lead').textContent = (g.namedBy ? g.namedBy + ' começou a te chamar de ' : 'O povo começou a te chamar de ') + g.name + ', ' + g.epithet + '. É assim que vão rezar daqui para a frente.';
+      body.innerHTML = `<label for="dom-name">Nome</label><div class="name-row"><input id="dom-name" maxlength="16" autocomplete="off" required value="${esc(g.name)}"><button type="button" class="btn btn-small" id="dom-roll">Outro</button></div>
+        <p class="small muted">O título (${esc(g.epithet)}) vem do que você mais fez e de como o povo te vê. Dá para trocar o nome depois, em Deus.</p>`;
+      ok.textContent = 'Assim vão me chamar';
+      ok.disabled = false;
+      $('#dom-roll').onclick = () => { const n = Dz.rollName(S); if (n) $('#dom-name').value = n; };
+      $('#form-dom').onsubmit = (e) => { e.preventDefault(); Dz.acceptName(S, $('#dom-name').value.trim()); UI.refreshChron(); next(); };
+    } else {
+      const lv = q.lv, def = Dz.levelDef(lv);
+      $('#dom-title').textContent = 'Nível ' + lv + ': ' + def.name;
+      $('#dom-lead').textContent = (LEVEL_LEAD[lv] || '') + ' Escolha um dom: ele fica para sempre.';
+      body.innerHTML = '<div class="dom-opts" role="radiogroup" aria-label="Dons">' + q.offer.map((id) => {
+        const d = Dz.DONS[id];
+        const side = d.side === 'bom' ? '<span class="side bom small">o povo te vê mais bondoso</span>' : d.side === 'temido' ? '<span class="side temido small">o povo te teme mais</span>' : '';
+        return `<button type="button" class="dom-opt" role="radio" aria-checked="false" data-dom="${id}"><img class="ico" src="${ic(d.icon)}" alt=""><span class="nm">${esc(d.name)}</span><span class="ds small">${esc(d.desc)}</span>${side}</button>`;
+      }).join('') + '</div>';
+      let pick = '';
+      ok.textContent = 'Escolher este dom';
+      ok.disabled = true;
+      body.querySelectorAll('.dom-opt').forEach((b) => b.addEventListener('click', () => {
+        pick = b.dataset.dom;
+        body.querySelectorAll('.dom-opt').forEach((x) => x.setAttribute('aria-checked', x === b ? 'true' : 'false'));
+        ok.disabled = false;
+      }));
+      $('#form-dom').onsubmit = (e) => { e.preventDefault(); if (!pick) return; Dz.chooseDom(S, pick); next(); };
+    }
+    m.hidden = false;
+    return true;
+  };
+
   // ---------- eventos da simulação ----------
   UI.consume = function (state, now, quiet) {
     const ev = state.events;
@@ -741,6 +991,8 @@
       else if (e.k === 'narr') { if (e.on && (e.ev === 'lobos' || e.ev === 'onca') && UI.hooks.alarm) UI.hooks.alarm(); }
       else if (e.k === 'disc') { if (e.hint) setTimeout(() => UI.toast(e.hint, 'good'), 1800); if (!$('#modal-disc').hidden) UI.disc(); }
       else if (e.k === 'era') { if (UI.hooks.era) UI.hooks.era(); }
+      else if (e.k === 'godLevel') { if (UI.hooks.godPending && !quiet) setTimeout(UI.hooks.godPending, 1400); }   // Etapa 11: o nome e o dom
+      else if (e.k === 'godName' || e.k === 'dom' || e.k === 'fe100') { /* só som */ }
       else if (e.k === 'bite') { G.R.event(e); if (UI.hooks.alarm) UI.hooks.alarm(); }
       else if (e.k === 'thanks') UI.toast(e.text, e.kind === 'luto' ? 'prayer' : 'thanks');
       else if (e.k === 'festa' || e.k === 'story' || e.k === 'fight' || e.k === 'goal' || e.k === 'moon' || e.k === 'song') { /* só som */ }

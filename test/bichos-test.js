@@ -9,7 +9,7 @@
 const path = require('path');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 globalThis.G = {};
-for (const f of ['core', 'config', 'world', 'sim', 'family', 'life', 'tech', 'invencoes', 'obras', 'fauna', 'bichos', 'campo', 'ai', 'god', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
+for (const f of ['core', 'config', 'world', 'sim', 'family', 'life', 'tech', 'invencoes', 'obras', 'fauna', 'bichos', 'campo', 'ai', 'god', 'deus', 'narrator', 'save', 'offline']) require(path.join(__dirname, '..', 'js', f + '.js'));
 const { W, Sim, CFG: C, Family: F, God, Save, AI, Tech: T, Inv: I, Life: L, Obras: O, Fauna: FA, Bichos: B, Narr: N } = G;
 const Y = 60 * 1440, D = 1440;
 
@@ -101,7 +101,8 @@ if (isMainThread) {
     const S = world(42);
     const byHerd = {};
     for (const h of S.fauna.herds) byHerd[h.sp] = (byHerd[h.sp] || 0) + 1;
-    check('bandos de cada espécie, na conta da tabela', Object.keys(C.BICHOS).every((sp) => (byHerd[sp] || 0) >= 1 && (byHerd[sp] || 0) <= C.BICHOS[sp].n), JSON.stringify(byHerd));
+    // o bicho que Deus cria (Etapa 11) não nasce com o mundo
+    check('bandos de cada espécie, na conta da tabela (o bicho de Deus, nenhum)', Object.keys(C.BICHOS).every((sp) => (C.BICHOS[sp].created ? !byHerd[sp] : (byHerd[sp] || 0) >= 1 && (byHerd[sp] || 0) <= C.BICHOS[sp].n)), JSON.stringify(byHerd));
   }
 
   // ===================== save antigo (só capivaras) =====================

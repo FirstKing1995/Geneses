@@ -208,7 +208,8 @@
     ['#3e2731', '#6a4a2a', '#8a7a3a', '#b8a050'],
     ['#3e2731', '#6a4a3a', '#8b6d5c', '#b89a80'],
   ];
-  function bush(fruit, season) {
+  // holy (Etapa 11): a árvore criada por Deus, sempre verde e de fruta dourada
+  function bush(fruit, season, holy) {
     const W = 14, H = 11, b = new Buf(W, H);
     const blobs = [[7, 6.6, 5.2], [3.8, 7.4, 3.4], [10.2, 7.4, 3.4], [6.2, 3.8, 3.2], [8.8, 4.2, 3]];
     const mask = new Uint8Array(W * H);
@@ -216,7 +217,7 @@
       if ((x + 0.5 - bl[0]) ** 2 + (y + 0.5 - bl[1]) ** 2 <= bl[2] * bl[2]) { mask[y * W + x] = 1; break; }
     }
     const m = (x, y) => (x >= 0 && y >= 0 && x < W && y < H ? mask[y * W + x] : 0);
-    const tones = BUSH_TONES[season];
+    const tones = holy ? ['#265c42', '#3e8948', '#63c74d', '#9be070'] : BUSH_TONES[season];
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       if (!m(x, y)) continue;
       const d = Math.hypot(x + 0.5 - 5, y + 0.5 - 2.5) / 8;
@@ -225,14 +226,17 @@
       if (!m(x, y + 1) || !m(x + 1, y)) t = 0;
       b.set(x, y, tones[t]);
     }
-    if (season === 3) for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (m(x, y) && !m(x, y - 1)) b.set(x, y, P.white);
+    if (season === 3 && !holy) for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (m(x, y) && !m(x, y - 1)) b.set(x, y, P.white);
     const spots = [[4, 5], [9, 4], [7, 8], [11, 7], [3, 8], [7, 3]];
-    for (let i = 0; i < Math.min(6, fruit * 2); i++) {
+    const n = holy ? Math.min(6, fruit + (fruit >= 3 ? 1 : 0)) : Math.min(6, fruit * 2);
+    for (let i = 0; i < n; i++) {
       const [x, y] = spots[i];
-      b.set(x, y, P.red); b.set(x - 1, y, P.wine); b.set(x, y - 1, P.rose);
+      if (holy) { b.set(x, y, P.gold); b.set(x - 1, y, P.orange); b.set(x, y - 1, P.yellow); }
+      else { b.set(x, y, P.red); b.set(x - 1, y, P.wine); b.set(x, y - 1, P.rose); }
     }
     return b.canvas();
   }
+  A.holyBush = (fruit) => bush(fruit, 0, true);
 
   // ---------- pedras ----------
   function rock(size, v, snow) {
@@ -1112,6 +1116,10 @@
       legs: [['kFk..kfk.....kfk.....', 'krk..kfk.....kfk.....', '.k...kk......kk......'], ['kFk..kfk.....kfk.....', 'krk.kfk.......kfk....', '.k..kk.........kk....'], ['kFk..kfk.....kfk.....', 'krk...kfk...kfk......', '.k....kk....kk.......']],
       map: { k: '#2b1a12', F: '#dc9a32', f: '#a86a22', r: '#4a2c18', L: '#f2dcae', e: '#fee761', n: '#3e2731' } },
   };
+  // Etapa 11: o bicho que Deus cria (o nome é o que o jogador der): manso, dourado, com pintas que brilham
+  BEASTS.criatura = { w: 13, body: ['.........k.k.', '........kYkYk', '........kFFFk', '.......kFFeFn', '.kkkkkkkFFFk.', 'kFFSFFFSFFk..', 'kFFFFSFFFFSk.', '.kfffffffk...'],
+    legs: [['..kf...kf....', '..kk...kk....'], ['.kf.....kf...', '.kk.....kk...'], ['...kf.kf.....', '...kk.kk.....']],
+    map: { k: '#3a2a3e', F: '#f0cf82', f: '#c49a4c', S: '#fff7cc', Y: '#fee761', e: '#181425', n: '#c28569' }, alt: { F: '#e6c070' } };
   A.BEAST = {};
   for (const k in BEASTS) { const d = BEASTS[k]; A.BEAST[k] = { w: d.w, h: d.body.length + d.legs[0].length, legs: d.legs[0].length }; }
   // olhos (quadro de frente para a direita): brilham no escuro, como os do lobo
@@ -1575,6 +1583,60 @@
   ICONS.praga = [['.........k', '........k.', '..kkkkkGk.', '.kGGGGGGek', 'kGgGgGgGGk', '.kkgkkkkk.', '..k.kk..k.', '.k..k.k..k', 'k...k..k..', '..........'],
     { k: '#265c42', G: '#9be070', g: '#63c74d', e: '#181425' }];
   ICONS.adubo = ICONS.roca;
+  // Etapa 11: Deus
+  ICONS.bencao = [['....Y.....', '..Y.W.Y...', '...YWY....', '.YWWWWWY..', '...YWY....', '..Y.W.Y...', '....Y.....', '..g....g..', '.gGg..gGg.', '..g....g..'],
+    { Y: P.gold, W: P.yellow, g: P.green, G: P.leaf }];
+  ICONS.estatua = [['...kkkk...', '..kllLlk..', '..kllmmk..', '...kmmk...', '.kkllllkk.', 'klllllmmdk', '.klllmmdk.', '.klllmmdk.', 'kkkkkkkkkk', 'kllllllmdk'],
+    { k: P.ink2, L: '#dfe6f0', l: P.silver, m: P.mist, d: P.slate }];
+  ICONS.olho = [['..........', '..........', '...kkkk...', '.kkWWWWkk.', 'kWWbbbbWWk', 'kWWbkkbWWk', 'kWWbbbbWWk', '.kkWWWWkk.', '...kkkk...', '..........'],
+    { k: P.ink2, W: P.parch, b: P.sky }];
+  ICONS.criatura = [['.......k.k', '......kYkY', '......kFFk', '.....kFeFn', '.kkkkkFFk.', 'kFSFFSFk..', 'kFFFSFFk..', '.kfffffk..', '..kf.kf...', '..kk.kk...'],
+    { k: '#3a2a3e', F: '#f0cf82', f: '#c49a4c', S: '#fff7cc', Y: P.yellow, e: P.ink, n: P.skinD }];
+  ICONS.peixeDeus = [['.......Y..', '......YWY.', '...kkkkY..', '..kFFFFkFk', '.kFeFFfkFk', '.kFFfffkk.', '..kffffkFk', '...kkkk.kk', '..........', '..........'],
+    { k: P.bark, F: P.gold, f: P.orange, e: P.ink, Y: P.gold, W: P.yellow }];
+  ICONS.arvoreDeus = [['....kk....', '..kkGGkk..', '.kGYGGYGk.', 'kGGGGGGYGk', 'kGYGGGGGGk', '.kGGGYGGk.', '..kkbbkk..', '....bb....', '....bb....', '..bbbbbb..'],
+    { k: P.pine, G: P.leaf, Y: P.gold, b: P.bark }];
+  ICONS.roda = [['...kkkk...', '..kBBBBk..', '.kB.kk.Bk.', 'kB..kk..Bk', 'kBkkkkkkBk', 'kBkkkkkkBk', 'kB..kk..Bk', '.kB.kk.Bk.', '..kBBBBk..', '...kkkk...'],
+    { k: P.maroon, B: P.wood }];
+  ICONS.escrita = [['.........k', '........kY', '.kkkkkkkYk', '.kTTTTTkk.', '.kTkTkTTk.', '.kTTTTTTk.', '.kTkkTkTk.', '.kTTTTTTk.', '.kTkTkkTk.', '.kkkkkkkk.'],
+    { k: P.maroon, T: P.tan, Y: P.yellow }];
+  ICONS.medicina = [['...g..g...', '..gGggGg..', '...gGGg...', '....gg....', '.kkkkkkkk.', '.kOOOOOOk.', '..kOgOOk..', '...kOOk...', '....kk....', '..........'],
+    { k: P.bark, O: P.wood, g: P.green, G: P.leaf }];
+  // a estátua de Deus (2×2, 32×46): pedestal de dois degraus e a figura de braços erguidos; o nicho do pedestal ganha a
+  // cor do milagre dela (vazio: ainda não consagrada); no nível 2, duas velas acesas ao pé
+  const GEM = { fogo: P.ember, chuva: P.sky, cura: P.leaf, trovao: P.yellow };
+  A.GEM = GEM;
+  const STATUE = [
+    '.......kk..............kk.......', '.......klk............klk.......', '........klk..........klk........', '........kmk..........kmk........',
+    '.........kmk........kmk.........', '.........kmk.kkkkkk.kmk.........', '.........kmkklllllmkkmk.........', '.........kmkkllLlmmkkmk.........',
+    '.........kmkklllmmmkkmk.........', '.........kmk.kllmmk.kmk.........', '.........kmk..kmmk..kmk.........', '.........kmllllllllllmk.........',
+    '..........kllLllldmmmk..........', '..........kllLllldmmmk..........', '..........kllLllldmmmk..........', '..........klLlllldmmdk..........',
+    '..........klLlllldmmdk..........', '..........klLlllldmmdk..........', '.........kllLlllldmmmdk.........', '.........kllLlllldmmmdk.........',
+    '.........klLllllldmmmdk.........', '.........klLllllldmmmdk.........', '.........kllLlllldmmmdk.........', '.........kllLlllldmmmdk.........',
+    '.........klLllllldmmmdk.........', '........kllLllllldmmmmdk........', '........kllLllllldmmmmdk........', '........klLlllllldmmmmdk........',
+    '........klLlllllldmmmmdk........', '........kllLllllldmmmmdk........', '........kllLllllldmmmmdk........', '........kllllllllddmmmdk........',
+    '........kkkkkkkkkkkkkkkk........', '......kkkkkkkkkkkkkkkkkkkk......', '......kLLLLLLLLLLLLLLLLLLk......', '......klllllllgggglllllmdk......',
+    '......kmmmmmmmggggmmmmmddk......', '......kmmmmmmmmmmmmmmmmddk......', '...kkkkkkkkkkkkkkkkkkkkkkkkkk...', '...kLLLLLLLLLLLLLLLLLLLLLLLLk...',
+    '...klllllllllllllllllllllmmdk...', '...klllllllllllllllllllllmmdk...', '...klllllllllllllllllllllmmdk...', '...klllllllllllllllllllllmmdk...',
+    '...kmmmmmmmmmmmmmmmmmmmmmmddk...', '...kkkkkkkkkkkkkkkkkkkkkkkkkk...',
+  ];
+  const statueCache = {};
+  A.STATUE_H = STATUE.length;
+  A.statue = function (lv, milagre) {
+    const key = (lv >= 2 ? 2 : 1) + (milagre || '');
+    if (statueCache[key]) return statueCache[key];
+    const rows = STATUE.map((r) => r);
+    if (lv >= 2) {
+      // as velas do altar, uma de cada lado, com a chama
+      const put = (y, x, s) => { rows[y] = rows[y].slice(0, x) + s + rows[y].slice(x + s.length); };
+      put(31, 0, '.o.'); put(32, 0, 'oyo'); put(33, 0, 'kWk'); put(34, 0, 'kWk'); put(35, 0, 'kWk'); put(36, 0, 'kWk'); put(37, 0, 'kkk');
+      put(31, 29, '.o.'); put(32, 29, 'oyo'); put(33, 29, 'kWk'); put(34, 29, 'kWk'); put(35, 29, 'kWk'); put(36, 29, 'kWk'); put(37, 29, 'kkk');
+      put(38, 3, 'kYYYYYYYYYYYYYYYYYYYYYYYYk');   // a beirada dourada do altar
+    }
+    const map = { k: P.ink2, L: '#dfe6f0', l: P.silver, m: P.mist, d: P.slate, g: milagre && GEM[milagre] ? GEM[milagre] : P.slate,
+      o: P.ember, y: P.yellow, W: P.parch, Y: P.gold };
+    return (statueCache[key] = fromRows(rows, map).canvas());
+  };
   const iconCache = {};
   A.icon = function (name) {
     if (iconCache[name]) return iconCache[name];
@@ -1590,6 +1652,7 @@
     S.broad = [0, 1, 2, 3].map((s) => [0, 1, 2].map((v) => broadTree(v, s)));
     S.arau = [0, 1, 2, 3].map((s) => [0, 1, 2].map((v) => arauTree(v, s)));
     S.bush = [0, 1, 2, 3].map((s) => [0, 1, 2, 3].map((f) => bush(f, s)));
+    S.holyBush = [0, 1, 2, 3, 4, 5].map((f) => bush(f, 0, true));   // Etapa 11
     S.rock = [0, 1, 2].map((sz) => [false, true].map((sn) => [0, 1].map((v) => rock(sz, v, sn))));
     S.stump = [stump(false), stump(true)];
     S.grave = grave().canvas();

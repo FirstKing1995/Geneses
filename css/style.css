@@ -476,3 +476,59 @@ body[data-sheet="cronica"] .drawer { display: flex; }
 .herd .chip img { width: 16px; height: auto; vertical-align: -3px; image-rendering: pixelated; }
 .choice-people img.cria { grid-row: span 2; width: 40px; height: auto; image-rendering: pixelated; justify-self: center; }
 #choice-yes:disabled { opacity: 0.5; cursor: not-allowed; }
+/* ---------- Deus (Etapa 11): nome, nível, dons, escolhidos, grandes atos ---------- */
+.deus-sub { color: var(--gold-hi); margin-top: -4px; }
+.deus-sub:empty { display: none; }
+.deus-more { position: relative; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; font-size: 12px; min-height: 34px; }
+.deus-more .ico { width: 16px; height: 16px; }
+.deus-more .deus-next { flex: 1; min-width: 0; color: var(--text); }
+.deus-more.pend { box-shadow: inset 0 0 0 2px var(--gold), inset 0 -4px 0 rgba(0, 0, 0, 0.25); animation: pendPulse 1.6s ease-in-out infinite; }
+.deus-more .badge { position: static; min-width: 18px; height: 18px; padding: 0 5px; background: var(--gold); color: var(--night); font-size: 12px; line-height: 18px; text-align: center; font-weight: 700; border: 1px solid var(--night); }
+@keyframes pendPulse { 50% { box-shadow: inset 0 0 0 2px var(--gold-hi), inset 0 -4px 0 rgba(0, 0, 0, 0.25), 0 0 10px rgba(254, 231, 97, 0.35); } }
+@media (prefers-reduced-motion: reduce) { .deus-more.pend { animation: none; } }
+.deus-card { width: min(560px, 100%); max-height: calc(100% - 32px); overflow: auto; }
+.deus-tabs { margin: 2px 0 6px; }
+.deus-tabs button { font: inherit; font-size: 14px; color: var(--text); }
+.deus-body { display: grid; gap: 10px; }
+.deus-body h3 { font-size: 14px; color: var(--gold-hi); margin-top: 6px; }
+.lvprog { display: grid; gap: 5px; padding: 8px 10px; background: var(--night); border: 2px solid var(--edge); }
+.lvlist, .donlist { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.lvlist li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; padding: 6px 10px; background: var(--night); border: 2px solid var(--edge); opacity: 0.7; }
+.lvlist li > div, .donlist li > div { display: grid; gap: 2px; min-width: 0; }
+.lvlist li.done { opacity: 0.9; border-color: var(--edge-2); }
+.lvlist li.on { opacity: 1; border-color: var(--gold); }
+.lvlist .lvn { width: 24px; height: 24px; display: grid; place-items: center; font-weight: 700; background: var(--panel-2); border: 2px solid var(--edge-2); }
+.lvlist li.on .lvn { background: var(--gold); color: var(--night); border-color: var(--gold-hi); }
+.lvlist li.done .lvn { color: var(--gold-hi); }
+.donlist li { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: center; padding: 6px 10px; background: var(--night); border: 2px solid var(--edge); }
+.donlist li.none { display: block; }
+.donlist li.made { border-color: var(--leaf); }
+.donlist li.cand { grid-template-columns: 1fr; }
+.donlist .ico { width: 24px; height: 24px; }
+.donlist .ok { color: #9be070; }
+.donlist .name-row { margin-top: 4px; }
+.donlist .name-row input { min-height: 34px; font-size: 14px; }
+.donlist li > .powbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.powbtns .ico { width: 16px; height: 16px; }
+.ttl { color: var(--gold-hi); font-weight: 500; font-size: 12px; }
+.pcard .nm .ttl { margin-left: 4px; }
+.god-line { color: var(--gold-hi); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.god-line .btn-small { min-height: 28px; }
+.dom-card { width: min(480px, 100%); max-height: calc(100% - 32px); overflow: auto; }
+.dom-card .ico-lg { width: 40px; height: 40px; }
+.dom-body { display: grid; gap: 6px; }
+.dom-opts { display: grid; gap: 8px; }
+.dom-opt { display: grid; grid-template-columns: 30px 1fr; gap: 2px 10px; align-items: center; text-align: left; padding: 8px 10px; cursor: pointer; background: var(--night); border: 2px solid var(--edge); color: var(--text); }
+.dom-opt .ico { grid-row: span 3; width: 28px; height: 28px; }
+.dom-opt .nm { font-size: 15px; font-weight: 600; }
+.dom-opt .ds { color: #d9c7a3; }
+.dom-opt .side.bom { color: #9be070; }
+.dom-opt .side.temido { color: #f6a0a4; }
+.dom-opt[aria-checked="true"] { border-color: var(--gold); background: #2a2238; box-shadow: inset 0 0 0 1px var(--gold-hi); }
+.consagra { display: grid; gap: 6px; }
+.consagra .mil, .consagra.done { display: grid; grid-template-columns: 24px 1fr; gap: 8px; align-items: center; text-align: left; padding: 6px 10px; }
+.consagra .mil > span, .consagra.done > span { display: grid; gap: 2px; }
+.consagra .mil .small, .consagra.done .small { color: var(--muted); font-weight: 400; }
+.consagra .mil.off { opacity: 0.6; }
+.consagra.done { background: var(--night); border: 2px solid var(--gold); }
+.consagra .ico { width: 22px; height: 22px; }

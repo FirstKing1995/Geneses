@@ -289,10 +289,18 @@
     }
     if (e.k === 'miracle') {
       const col = e.kind === 'chuva' ? '#9fe8ff' : e.kind === 'cura' ? '#9be070' : '#fee761';
-      for (let i = 0; i < 26; i++) {
-        const a = Math.random() * Math.PI * 2, r = Math.random() * 3 * TS;
-        spawn({ x: e.x * TS + 8 + Math.cos(a) * r, y: e.y * TS + 8 + Math.sin(a) * r, vx: 0, vy: -10 - Math.random() * 18, g: 0, life: 1.4 + Math.random(), col });
+      // Etapa 11: os grandes atos espalham mais luz (e mais longe)
+      const big = e.kind === 'consagrar' || e.kind === 'criar' || e.kind === 'saber', n = big ? 60 : e.kind === 'bencao' ? 40 : 26, R0 = big ? 6 : e.kind === 'bencao' ? 5 : 3;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, r = Math.random() * R0 * TS;
+        spawn({ x: e.x * TS + 8 + Math.cos(a) * r, y: e.y * TS + 8 + Math.sin(a) * r, vx: 0, vy: -10 - Math.random() * 18, g: 0, life: 1.4 + Math.random() * (big ? 1.6 : 1), col: big && Math.random() < 0.3 ? '#ffffff' : col });
       }
+      return;
+    }
+    if (e.k === 'ungir' || e.k === 'converte' || e.k === 'estatua') {
+      // escolhido, convertido, estátua pronta: uma coluna de luz subindo
+      const col = e.k === 'converte' ? '#9fe8ff' : '#fee761';
+      for (let i = 0; i < 34; i++) spawn({ x: e.x * TS + (Math.random() - 0.5) * 10, y: e.y * TS + 2 - Math.random() * 6, vx: (Math.random() - 0.5) * 3, vy: -18 - Math.random() * 26, g: 0, life: 1.2 + Math.random() * 1.2, col: Math.random() < 0.3 ? '#ffffff' : col });
       return;
     }
     if (e.k === 'fireLit') {
@@ -567,6 +575,34 @@
   }
 
   function drawAuras(S, now) {
+    // Etapa 11: a Bênção (um brilho verde-dourado no chão) e a Luz do escolhido e da estátua do fogo
+    for (const b of S.god.blessings || []) {
+      if (b.until <= S.t) continue;
+      const cx = (b.x + 0.5) * TS * sc + ox, cy = (b.y + 0.5) * TS * sc + oy, r = b.r * TS * sc;
+      const left = (b.until - S.t) / (C.BENCAO_H * 60), pulse = 0.5 + 0.5 * Math.sin(now / 800);
+      ctx.save();
+      const g = ctx.createRadialGradient(cx, cy, r * 0.1, cx, cy, r);
+      g.addColorStop(0, 'rgba(155,224,112,' + (0.10 + 0.04 * pulse) * Math.min(1, left * 4) + ')');
+      g.addColorStop(0.8, 'rgba(254,231,97,' + 0.06 * Math.min(1, left * 4) + ')');
+      g.addColorStop(1, 'rgba(254,231,97,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      if (Math.random() < 0.12) spawn({ x: (b.x + 0.5) * TS + (Math.random() - 0.5) * b.r * TS * 1.5, y: (b.y + 0.5) * TS + (Math.random() - 0.5) * b.r * TS * 1.5, vx: 0, vy: -6, g: 0, life: 1.3, col: Math.random() < 0.5 ? '#9be070' : '#fee761' });
+    }
+    if (G.Deus && S.god.pending) {
+      const night = S.ck.hour >= 18.5 || S.ck.hour < 5.5;
+      for (const L of G.Deus.lights(S)) {
+        const cx = L.x * TS * sc + ox, cy = L.y * TS * sc + oy, r = L.r * TS * sc, pulse = 0.5 + 0.5 * Math.sin(now / 500 + (L.pid || L.bid || 0));
+        ctx.save();
+        const g = ctx.createRadialGradient(cx, cy, r * 0.1, cx, cy, r);
+        g.addColorStop(0, 'rgba(254,231,97,' + ((night ? 0.2 : 0.09) + 0.05 * pulse) + ')');
+        g.addColorStop(1, 'rgba(254,174,52,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+    }
     for (const a of S.god.auras) {
       const cx = (a.x + 0.5) * TS * sc + ox, cy = (a.y + 0.5) * TS * sc + oy, r = a.r * TS * sc;
       const left = (a.until - S.t) / (C.CALOR_HOURS * 60);
@@ -679,7 +715,13 @@
         break;
       }
       case 'stump': blit(S.stump[snow ? 1 : 0], bx + 3, by + 7); break;
-      case 'bush': blit(S.bush[season][Math.min(3, o.fruit)], bx + 1, by + 4); break;
+      case 'bush':
+        if (o.holy) {
+          // Etapa 11: a árvore de Deus, de fruta dourada (e um brilho de vez em quando)
+          blit(S.holyBush[Math.min(5, o.fruit)], bx + 1, by + 4);
+          if (!tiny && ((performance.now() / 650 + o.id * 1.7) % 6) < 0.35) rect(bx + 4 + (o.id % 7), by + 5 + (o.id % 3), 1, 1, '#fee761');
+        } else blit(S.bush[season][Math.min(3, o.fruit)], bx + 1, by + 4);
+        break;
       case 'rock': {
         const sz = o.big ? (o.ch >= 3 ? 2 : 1) : 0;
         const img = S.rock[sz][snow ? 1 : 0][o.v % 2];
@@ -780,6 +822,23 @@
       drawWorks(S2, b, bx, by, ghost, now, lv);
     } else if (S2.shop[b.type]) {
       drawShop(S, S2, b, bx, by, ghost, lv, now);
+    } else if (b.type === 'estatua') {
+      // Etapa 11: a estátua (o nicho com a cor do milagre); consagrada, uma luz gira em volta da cabeça
+      const img = A.statue(lv, b.built ? b.milagre : null), top = by + 31 - img.height;
+      blit(S2.bigShadow, bx + 6, by + 27, ghost ? 0.4 : undefined);
+      blit(img, bx, top, ghost ? 0.45 : undefined);
+      if (b.built && b.milagre) {
+        const col = A.GEM[b.milagre] || '#fee761';
+        for (let k = 0; k < 6; k++) {
+          const ang = now / 900 + k * Math.PI / 3;
+          rect(bx + 16 + Math.cos(ang) * 6 - 0.5, top + 8 + Math.sin(ang) * 2.5, 1, 1, k % 2 ? '#ffffff' : col);
+        }
+        if (Math.random() < 0.04) spawn({ x: bx + 16 + (Math.random() - 0.5) * 12, y: top + 10, vx: 0, vy: -8, g: 0, life: 1.2, col });
+      } else if (b.built) {
+        // ainda sem milagre: o sinal de Deus pulsa em cima, chamando o toque
+        const icon = A.icon('deus'), bob = Math.round(Math.sin(now / 300) * 1.5);
+        blit(icon, bx + 16 - icon.width / 2, top - 12 + bob, 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(now / 400)));
+      }
     } else {
       const img = houseImg(d);
       const top = by + 31 - img.height;
@@ -945,6 +1004,7 @@
     const sh = A.spr[SHADOW[sp] || 'shadow'];
     blit(sh, wx - sh.width / 2, wy + 1);
     ctx.drawImage(A.beastSheet(sp, e.big), frame * d.w, side * d.h, d.w, d.h, Math.round((wx - d.w / 2) * sc + ox), Math.round((wy + 3 - d.h) * sc + oy), Math.round(d.w * sc), Math.round(d.h * sc));
+    if (sp === 'criatura' && Math.random() < 0.015) spawn({ x: wx + (Math.random() - 0.5) * 10, y: wy - 6, vx: 0, vy: -6, g: 0, life: 1, col: '#fee761' });   // o bicho de Deus brilha (Etapa 11)
     if (e.state === 'investida') bang(wx, wy + 3 - d.h - 2, now);   // vem para cima: um "!" vermelho
   }
   // "!" de perigo em cima de um bicho
@@ -1072,6 +1132,15 @@
     else if (a && a.type === 'caca' && a.stage === 'cut' && Tk('faca')) drawKnife(wx, wy, p.dir, Math.floor(now / 220) % 2);
     else if (a && a.type === 'historia' && a.stage === 'tell' && S.life && S.life.story && S.life.story.music) drawFlute(wx, top, p.dir);
     else if (drummer) drawDrum(wx, wy, p.dir, now);
+    // Etapa 11: o escolhido tem um halo (curar: verde; Palavra: branco; Luz: dourado); quem reza na estátua, mãos para o alto
+    if (p.escolhido) {
+      const col = p.escolhido.power === 'cura' ? '#9be070' : p.escolhido.power === 'palavra' ? '#ffffff' : '#fee761';
+      const hy = top - 2 + dy + Math.round(Math.sin(now / 400) * 0.5);
+      rect(wx - 2, hy, 4, 1, col); rect(wx - 3, hy + 1, 1, 1, col); rect(wx + 2, hy + 1, 1, 1, col);
+    }
+    if (a && a.type === 'rezar' && a.stage === 'pray' && Math.random() < 0.03) spawn({ x: wx + (Math.random() - 0.5) * 6, y: top + 2, vx: 0, vy: -9, g: 0, life: 1, col: '#fee761' });
+    if (a && a.type === 'curar' && a.stage === 'heal' && Math.random() < 0.2) spawn({ x: wx + (Math.random() - 0.5) * 10, y: top + 6, vx: (Math.random() - 0.5) * 4, vy: -7, g: 0, life: 0.9, col: '#9be070' });
+    if (work && S.god && S.god.blessings && S.god.blessings.length && G.Deus && G.Deus.blessAt(S, p.x, p.y) > 1 && Math.random() < 0.05) spawn({ x: wx + (Math.random() - 0.5) * 8, y: top + 4, vx: 0, vy: -8, g: 0, life: 0.8, col: '#fee761' });
     if (p.prayer) {
       const icon = A.icon('reza'), bob = Math.round(Math.sin(now / 250) * 1);
       blit(icon, wx - icon.width / 2, top - 8 - (p.carry ? 6 : 0) + bob);
@@ -1211,6 +1280,7 @@
     if (type === 'jirau') return { img: S2.jirau, dy: 2 };
     if (type === 'forno') return { img: S2.forno, dy: 1 };
     if (type === 'roca') return { img: A.rocaSoil('warm'), dy: 0 };
+    if (type === 'estatua') { const img = A.statue(1, null); return { img, dy: 31 - img.height }; }   // Etapa 11
     if (type === 'curral') {
       if (!S2.curralGhost) { const [c, x] = A.mk(48, 60); for (const p of ['ground', 'back', 'front']) x.drawImage(A.curral(1, p), 0, 0); S2.curralGhost = c; }
       return { img: S2.curralGhost, dy: -12 };
@@ -1344,6 +1414,11 @@
     const fires = S.buildings.filter((b) => b.type === 'fogueira' && b.built && b.fuel > 0);
     if (S.god) for (const a of S.god.auras) {
       const cx = ((a.x + 0.5) * TS * sc + ox) / 4, cy = ((a.y + 0.5) * TS * sc + oy) / 4, r = a.r * TS * sc / 4;
+      for (const [f, al] of [[1.0, 0.3], [0.7, 0.6], [0.4, 0.9]]) { lctx.fillStyle = 'rgba(0,0,0,' + al + ')'; lctx.beginPath(); lctx.arc(cx, cy, r * f, 0, Math.PI * 2); lctx.fill(); }
+    }
+    // Etapa 11: a Luz do escolhido e a estátua do fogo clareiam a noite
+    if (G.Deus && S.god && S.god.pending) for (const L of G.Deus.lights(S)) {
+      const cx = (L.x * TS * sc + ox) / 4, cy = (L.y * TS * sc + oy) / 4, r = L.r * TS * sc / 4;
       for (const [f, al] of [[1.0, 0.3], [0.7, 0.6], [0.4, 0.9]]) { lctx.fillStyle = 'rgba(0,0,0,' + al + ')'; lctx.beginPath(); lctx.arc(cx, cy, r * f, 0, Math.PI * 2); lctx.fill(); }
     }
     for (const b of fires) {

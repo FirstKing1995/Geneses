@@ -99,6 +99,11 @@
     // relações livres (pedido do jogador na 0.10): só entre adultos
     noiteTres: { t: 'Passou a noite a três', v: 9, d: 2 * 1440 },
     noiteMuitos: { t: 'Esticou a festa noite adentro', v: 10, d: 2 * 1440 },
+    // Etapa 11: Deus
+    converteu: { t: 'Passou a acreditar', v: 10, d: 5 * 1440 },
+    escolhido: { t: 'Foi escolhido por Deus', tf: 'Foi escolhida por Deus', v: 15, d: 10 * 1440 },
+    ouviuSermao: { t: 'Ouviu a pregação ao pé do fogo', v: 5, d: 1440 },
+    rezou: { t: 'Rezou ao pé da estátua', v: 3, d: 1440 },
   };
   Sim.MEM = MEM; Sim.TRAIT_DESC = TRAIT_DESC;
 
@@ -494,6 +499,8 @@
         // armazém, marcenaria e tecelagem (Etapa 7)
       } else if (G.Campo && G.Campo.onBuilt(S, b)) {
         // roça e curral (Etapa 10)
+      } else if (G.Deus && G.Deus.onBuilt(S, b)) {
+        // a estátua (Etapa 11)
       } else {
         if (!S.stats.firstTent) { S.stats.firstTent = true; Sim.chron(S, 'Ergueram a primeira barraca.'); }
         else Sim.toast(S, C.BUILD[b.type].name + ' pronta.');
@@ -591,7 +598,7 @@
     if (n.sede <= 0) { const d = C.HEALTH_DAY.sede / 24 * h; n.saude -= d; p.dmg.sede += d; hurt = true; }
     if (n.calor <= 0) { const d = C.HEALTH_DAY.frio / 24 * h; n.saude -= d; p.dmg.frio += d; hurt = true; }
     else if (n.calor < C.HYPOTHERMIA_BELOW) { const d = C.HYPOTHERMIA_DAY / 24 * h; n.saude -= d; p.dmg.frio += d; hurt = true; }
-    if (!hurt && n.fome > 25 && n.sede > 25 && n.calor > 25) n.saude += C.HEALTH_REGEN_DAY / 24 * h;
+    if (!hurt && n.fome > 25 && n.sede > 25 && n.calor > 25) n.saude += C.HEALTH_REGEN_DAY / 24 * h * (G.Deus && G.Deus.saber(S, 'medicina') ? C.MEDICINA_REGEN : 1);
     n.saude = Math.min(100, n.saude);
     // saúde cheia: as feridas antigas não contam mais para a causa de uma morte futura
     if (n.saude >= 100) { const d = p.dmg; if (d.fome || d.sede || d.frio || d.raio || d.parto || d.lobo || d.onca || d.jacare || d.bicho) { d.fome = d.sede = d.frio = 0; d.raio = d.parto = d.lobo = d.onca = d.jacare = d.bicho = 0; } }
@@ -626,7 +633,7 @@
     const h = S.ck.hour;
     const crisis = n.sede < 25 || n.fome < 20 || n.calor < 20 || n.energia < 25;
     if (p.mood < 12 && !crisis && h >= 7 && h < 17 && !p.sleeping && !p.carriedBy && !p.labor && G.Family.age(S, p) >= 12 && (!p.act || p.act.type !== 'greve') &&
-      (p.greveAt === undefined || S.t - p.greveAt > 2 * C.DAY_MIN) && S.rng.chance(0.25)) {
+      (p.greveAt === undefined || S.t - p.greveAt > 2 * C.DAY_MIN) && !(G.Deus && G.Deus.dom(S, 'temor')) && S.rng.chance(0.25)) {
       p.greveAt = S.t;
       G.AI.abort(S, p);
       G.AI.startGreve(S, p);
@@ -643,11 +650,20 @@
     const ck = S.ck, w = S.world;
     const per = C.BUSH_DAYS_PER_FRUIT[ck.season];
     const bm = G.Narr ? G.Narr.bushMult(S) : 1;   // seca para, fartura acelera
+    const terra = G.Deus && G.Deus.dom(S, 'terra') ? C.DOM.terraBush : 1;   // Etapa 11: Mão na Terra
     for (const o of w.objs) {
       if (o.k === 'bush') {
+        if (o.holy) {
+          // Etapa 11: a árvore criada por Deus dá fruta o ano todo, até no inverno e na seca
+          if (o.fruit < C.ARVORE_MAX) {
+            o.grow += Math.max(1, bm) * terra / C.ARVORE_DAYS;
+            if (o.grow >= 1) { const add = Math.floor(o.grow); o.fruit = Math.min(C.ARVORE_MAX, o.fruit + add); o.grow -= add; }
+          }
+          continue;
+        }
         if (ck.season === 3) { o.fruit = 0; o.grow = 0; continue; }   // o inverno derruba as frutas que sobraram
         if (per > 0 && bm > 0 && o.fruit < C.BUSH_MAX) {
-          o.grow += bm / per;
+          o.grow += bm / per * terra;
           if (o.grow >= 1) { const add = Math.floor(o.grow); o.fruit = Math.min(C.BUSH_MAX, o.fruit + add); o.grow -= add; }
         }
       } else if (o.k === 'stump') {
@@ -749,10 +765,10 @@
   function checkGoals(S) {
     for (const g of S.goals) {
       if (g.done) continue;
-      const fn = GOAL_TEST[g.id] || G.Family.goalTest[g.id] || G.Tech.goalTest[g.id] || (G.Obras && G.Obras.goalTest[g.id]) || (G.Inv && G.Inv.goalTest[g.id]) || (G.Bichos && G.Bichos.goalTest[g.id]) || (G.Campo && G.Campo.goalTest[g.id]);
+      const fn = GOAL_TEST[g.id] || G.Family.goalTest[g.id] || G.Tech.goalTest[g.id] || (G.Obras && G.Obras.goalTest[g.id]) || (G.Inv && G.Inv.goalTest[g.id]) || (G.Bichos && G.Bichos.goalTest[g.id]) || (G.Campo && G.Campo.goalTest[g.id]) || (G.Deus && G.Deus.goalTest[g.id]);
       if (!fn || !fn(S)) continue;
       g.done = true;
-      if (g.reward && S.god && !g.paid) { g.paid = true; S.god.poder += g.reward; }
+      if (g.reward && S.god && !g.paid) { g.paid = true; G.God.gain(S, g.reward); }
       Sim.toast(S, 'Meta cumprida: ' + g.text.toLowerCase() + '.' + (g.reward ? ' +' + g.reward + ' de Poder.' : ''), 'good');
       S.events.push({ k: 'goal', id: g.id });
     }
@@ -794,7 +810,7 @@
   }
   // missões pequenas das obras que entram em cada fase (Etapa 7)
   const missions = (S, phase) => (G.Obras ? G.Obras.missions(phase) : []).concat(G.Inv ? G.Inv.missions(phase) : [], G.Bichos ? G.Bichos.missions(phase) : [],
-    G.Campo ? G.Campo.missions(phase) : [])
+    G.Campo ? G.Campo.missions(phase) : [], G.Deus ? G.Deus.missions(phase) : [])
     .filter((m) => !S.goals.some((g) => g.id === m.id));
   Sim.checkGoals = checkGoals;
   Sim.daily = (S) => daily(S);   // para os testes
@@ -871,7 +887,7 @@
     const i = Math.floor(p.y) * S.world.W + Math.floor(p.x);
     if (p.seenTile === i) return;
     p.seenTile = i;
-    reveal(S, Math.floor(p.x) + 0.5, Math.floor(p.y) + 0.5, C.SEE_R);
+    reveal(S, Math.floor(p.x) + 0.5, Math.floor(p.y) + 0.5, G.Deus ? G.Deus.seeR(S) : C.SEE_R);   // Olhos do Céu: mais longe
   }
 
   // a fogueira aquece bem só quem cabe em volta dela: os mais perto ganham o lugar
@@ -918,6 +934,7 @@
     if (G.Narr) G.Narr.step(S, dt);   // lobos e viajantes
     if (G.Fauna) G.Fauna.step(S, dt);   // capivaras
     if (G.Campo) G.Campo.step(S, dt);   // bichos de criação (Etapa 10)
+    if (G.Deus && S.god && S.god.pending) G.Deus.tick(S, dt);   // o raio da estátua do trovão (Etapa 11)
     G.Tech.step(S, dt);   // moquém e jirau
     for (const p of S.people) if (p.alive && p.needs.saude <= 0) die(S, p);
   };
@@ -928,6 +945,7 @@
   Sim.init = function (S) {
     if (G.Obras) G.Obras.init(S);   // antes de tudo: saves antigos (barraca avançada vira barraca nível 2)
     G.God.init(S);
+    if (G.Deus) G.Deus.init(S);   // Etapa 11: glória, níveis, dons, nome, escolhidos
     G.Family.init(S);
     if (G.Narr) G.Narr.init(S);
     G.Tech.init(S);

@@ -68,7 +68,7 @@
     const t = S.tech;
     for (const [id, w] of list) {
       if (!K.isOpen(S, id)) continue;
-      const h = w * dt / 60;
+      const h = w * dt / 60 * (G.Deus ? G.Deus.pratMult(S) : 1);   // a escrita (Etapa 11) apressa
       t.prat[id] = (t.prat[id] || 0) + h;
       if (p) { const who = t.whoCampo[id] || (t.whoCampo[id] = {}); who[p.id] = (who[p.id] || 0) + h; }
     }
@@ -227,7 +227,8 @@
     const f = farmOf(b), d = C.ROCA[f.k];
     if (!d) return 0;
     const mult = (Sim().def(b).farm || { mult: 1 }).mult;
-    return Math.max(0, Math.round(d.yield * mult * (f.bonus || 1) * (1 - Math.min(0.95, f.lost || 0))));
+    const terra = G.Deus && G.Deus.dom(S, 'terra') ? C.DOM.terraRoca : 1;   // Etapa 11: Mão na Terra
+    return Math.max(0, Math.round(d.yield * mult * (f.bonus || 1) * terra * (1 - Math.min(0.95, f.lost || 0))));
   };
   // tarefa da roça para alguém (ou só para saber se há): colher, levar a colheita, capinar, plantar
   K.rocaPlan = function (S, p) {
@@ -901,17 +902,28 @@
   }
 
   // ---------- milagres e Narrador ----------
-  K.onChuva = function (S, x, y) {
+  K.onChuva = function (S, x, y, days) {
     let n = 0;
     for (const b of K.rocas(S)) {
       const f = farmOf(b);
       if (f.st !== 'crescendo' || Math.hypot(b.x + 1.5 - x, b.y + 1.5 - y) > C.CHUVA_R) continue;
-      f.grow = Math.min(0.999, f.grow + C.ROCA_CHUVA_D / C.ROCA[f.k].days);
+      f.grow = Math.min(0.999, f.grow + (days || C.ROCA_CHUVA_D) / C.ROCA[f.k].days);   // Céu Generoso (Etapa 11): 3 dias
       n++;
     }
     return n;
   };
-  K.onFartura = function (S) { for (const b of K.rocas(S)) { const f = farmOf(b); if (f.st === 'crescendo') f.bonus = C.ROCA_FARTURA; } };
+  K.onFartura = function (S) { for (const b of K.rocas(S)) { const f = farmOf(b); if (f.st === 'crescendo') f.bonus = Math.max(f.bonus || 1, C.ROCA_FARTURA); } };
+  // Etapa 11: a Bênção sobre a roça plantada faz a colheita render metade a mais
+  K.onBencao = function (S, x, y, r) {
+    let n = 0;
+    for (const b of K.rocas(S)) {
+      const f = farmOf(b);
+      if (!f.k || Math.hypot(b.x + 1.5 - x - 0.5, b.y + 1.5 - y - 0.5) > r + 1.5) continue;
+      f.bonus = Math.max(f.bonus || 1, C.BENCAO_MULT);
+      n++;
+    }
+    return n;
+  };
   // praga: gafanhotos numa roça que está crescendo (a de maior colheita)
   K.growing = (S) => K.rocas(S).filter((b) => farmOf(b).st === 'crescendo' && farmOf(b).k !== 'algodao');
   K.pest = function (S) {

@@ -116,7 +116,7 @@
     const t = S.tech;
     for (const [id, w] of list) {
       if (!I.isOpen(S, id)) continue;
-      const h = w * dt / 60;
+      const h = w * dt / 60 * (G.Deus ? G.Deus.pratMult(S) : 1);   // a escrita (Etapa 11) apressa
       t.prat[id] = (t.prat[id] || 0) + h;
       if (p) { const who = t.whoInv[id] || (t.whoInv[id] = {}); who[p.id] = (who[p.id] || 0) + h; }
     }

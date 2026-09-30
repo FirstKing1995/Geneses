@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Deus da Etapa 11</title>
+<style>body{margin:0;background:#262b44;color:#ead4aa;font:12px monospace} canvas{image-rendering:pixelated;display:block}</style></head>
+<body><canvas id="sheet"></canvas>
+<script src="../js/core.js"></script><script src="../js/config.js"></script><script src="../js/world.js"></script>
+<script src="../js/sim.js"></script><script src="../js/family.js"></script><script src="../js/life.js"></script><script src="../js/tech.js"></script><script src="../js/invencoes.js"></script>
+<script src="../js/obras.js"></script><script src="../js/fauna.js"></script><script src="../js/bichos.js"></script><script src="../js/campo.js"></script><script src="../js/ai.js"></script>
+<script src="../js/god.js"></script><script src="../js/deus.js"></script><script src="../js/narrator.js"></script><script src="../js/save.js"></script>
+<script src="../js/art.js"></script>
+<script>
+// folha de Deus (4x) sobre a grama: a estátua (sem milagre e com cada um, nos dois níveis), as árvores de Deus com
+// 0 a 5 frutas, o bicho criado (andando, na outra cor e abatido) e os ícones da Etapa 11
+const A = G.Art;
+A.build();
+const sh = document.getElementById('sheet'); sh.width = 1400; sh.height = 1300;
+const x = sh.getContext('2d'); x.imageSmoothingEnabled = false;
+x.fillStyle = '#58a447'; x.fillRect(0, 0, 1400, 1300);
+let px = 8, py = 8, rowH = 0;
+function put(img, s, sx, sy, sw, sh2) { s = s || 4; const w = sw || img.width, h = sh2 || img.height; if (px + w * s > 1392) { px = 8; py += rowH + 10; rowH = 0; } x.drawImage(img, sx || 0, sy || 0, w, h, px, py, w * s, h * s); px += w * s + 10; rowH = Math.max(rowH, h * s); }
+function nl() { px = 8; py += rowH + 12; rowH = 0; }
+for (const m of [null, 'fogo', 'chuva', 'cura', 'trovao']) put(A.statue(1, m), 4);
+nl();
+for (const m of [null, 'fogo', 'chuva', 'cura', 'trovao']) put(A.statue(2, m), 4);
+nl();
+for (let f = 0; f <= 5; f++) put(A.holyBush(f), 6);
+nl();
+const d = A.BEAST.criatura;
+put(A.beastSheet('criatura', false), 6); put(A.beastSheet('criatura', true), 6); put(A.beastDead('criatura'), 6);
+nl();
+for (const k of ['deus', 'bencao', 'estatua', 'olho', 'criatura', 'peixeDeus', 'arvoreDeus', 'roda', 'escrita', 'medicina', 'reza', 'verao', 'cura', 'fogo', 'chuva', 'raio', 'bebe', 'lobo', 'roca', 'revelacao']) put(A.icon(k), 5);
+void d;
+document.title = 'pronto';
+</script></body></html>
