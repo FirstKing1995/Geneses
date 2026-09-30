@@ -182,6 +182,29 @@
   </div>
 </div>
 
+<!-- Deus (Etapa 11): níveis e dons, escolhidos, grandes atos -->
+<div id="modal-deus" class="modal" hidden>
+  <div class="panel modal-card deus-card" role="dialog" aria-labelledby="deus-mtitle">
+    <h2 id="deus-mtitle">Deus</h2>
+    <div class="tabs deus-tabs" role="tablist">
+      <button type="button" role="tab" data-gtab="nivel" class="on">Níveis e dons</button>
+      <button type="button" role="tab" data-gtab="escolhidos">Escolhidos</button>
+      <button type="button" role="tab" data-gtab="atos">Grandes atos</button>
+    </div>
+    <div id="deus-body" class="deus-body"></div>
+    <div class="modal-actions"><span id="deus-poder" class="small muted"></span><button id="deus-close" class="btn">Fechar</button></div>
+  </div>
+</div>
+<!-- Deus sobe de nível: o nome que o povo dá e o dom -->
+<div id="modal-dom" class="modal" hidden>
+  <form id="form-dom" class="panel modal-card dom-card" role="dialog" aria-labelledby="dom-title">
+    <img id="dom-ico" class="ico ico-lg" alt="">
+    <h2 id="dom-title">Deus</h2>
+    <p id="dom-lead" class="story"></p>
+    <div id="dom-body" class="dom-body"></div>
+    <div class="modal-actions"><span class="small muted">O jogo fica pausado até você decidir.</span><button type="submit" id="dom-ok" class="btn btn-gold">Escolher</button></div>
+  </form>
+</div>
 <!-- árvore da família -->
 <div id="modal-tree" class="modal" hidden>
   <div class="panel modal-card tree-card">
@@ -236,7 +259,7 @@
       <label class="small muted" for="snd-amb">Ambiente</label><input type="range" id="snd-amb" min="0" max="100" step="5">
       <label class="small muted" for="snd-sfx">Efeitos</label><input type="range" id="snd-sfx" min="0" max="100" step="5">
     </div>
-    <p class="small muted keys">Espaço pausa · 1 a 5 velocidade · F fogueira · B barraca · G armazém · M moquém · J jirau · O forno · K marcenaria · L tecelagem · H roça · Y curral · P caminho · X cerca · Q calor · R raio · U chuva · E cura · V revelação · C crônica · T árvore · I descobertas · N som · Esc fecha · roda do mouse aproxima</p>
+    <p class="small muted keys">Espaço pausa · 1 a 5 velocidade · F fogueira · B barraca · G armazém · M moquém · J jirau · O forno · K marcenaria · L tecelagem · H roça · Y curral · P caminho · X cerca · Q calor · R raio · U chuva · E cura · V revelação · Z bênção · C crônica · T árvore · I descobertas · N som · Esc fecha · roda do mouse aproxima</p>
   </div>
 
   <div id="stock" class="panel stock" aria-label="Estoque"></div>
@@ -255,9 +278,11 @@
       <div id="obra"></div>
     </aside>
     <aside id="p-deus" class="panel sheet" data-sheet="deus">
-      <div class="deus-head"><h2>Deus</h2><span class="small"><b id="poder-num">0</b> de Poder</span></div>
+      <div class="deus-head"><h2 id="deus-title">Deus</h2><span class="small"><b id="poder-num">0</b> de Poder</span></div>
+      <p id="deus-sub" class="small deus-sub"></p>
       <div class="bar poder" title="O Poder nasce da fé do povo"><i id="poder-bar"></i></div>
       <div class="align" title="Como o povo vê você"><span class="small muted">Temido</span><div class="align-track"><i id="align-mark"></i></div><span class="small muted">Bondoso</span></div>
+      <button id="btn-deus" class="btn btn-small deus-more" type="button" title="Níveis, dons, escolhidos e grandes atos"><img class="ico" alt=""><span id="deus-next" class="deus-next">Níveis e dons</span><span class="badge" id="badge-dom" hidden>!</span></button>
       <div id="miracles" class="miracles"></div>
       <ol id="prayers" class="prayers"></ol>
     </aside>
@@ -316,6 +341,7 @@
 <script src="js/campo.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/god.js"></script>
+<script src="js/deus.js"></script>
 <script src="js/narrator.js"></script>
 <script src="js/save.js"></script>
 <script src="js/offline.js"></script>
